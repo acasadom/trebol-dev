@@ -8,6 +8,7 @@ Trebol [
 ; again. Saving writes the text back through the file API of server/files.js.
 
 import %model.trb
+import %demo.trb
 
 ; what the palette adds, and the text each new face starts with
 kinds: [
@@ -23,33 +24,57 @@ saved: ""           ; its text as last read or saved
 d: none             ; the design read from text
 chosen: none        ; the index of the chosen face in faces-of d
 problem: none       ; why the text does not load, when it does not
+demo: none          ; with no server: the files of the demo project, kept in the page
+demo-saved: none    ; and each as last downloaded
 
 ; the file API answers only the designer's own pages, which say so with this header
 api-get: func [url] [fetch/with url [headers: [X-Trebol-Dev "1"]]]
 api-put: func [url content] [fetch/with url [method: 'PUT  body: content  headers: [X-Trebol-Dev "1"]]]
 
-read-files: does [
-    r: api-get "/api/files"
-    project-name/text: r/name
-    files: r/files
+read-files: function [] [
+    ; no file API answers on a web page: the demo project, saved by downloading
+    either error? r: try [api-get "/api/files"] [
+        set 'demo copy demo-files
+        set 'demo-saved copy demo-files
+        project-name/text: "demo: Save downloads the file"
+        set 'files sort keys-of demo
+    ] [
+        project-name/text: r/name
+        set 'files r/files
+    ]
     file-choice/options: files
     either empty? files [nothing/hidden: false] [open-file first files]
 ]
 
 open-file: function [name [string!]] [
+    if all [path  text <> saved] [
+        ; the demo keeps the changes of a file left; a project's file is left only if the user says so
+        either demo [put demo path text] [
+            unless confirm/role rejoin [path " has changes that are not saved. Leave them?"] 'danger [
+                file-choice/value: path
+                exit
+            ]
+        ]
+    ]
     set 'path name
     file-choice/value: name
-    t: api-get rejoin ["/api/file?path=" enhex name]
-    set 'saved t
+    t: either demo [select demo name] [api-get rejoin ["/api/file?path=" enhex name]]
+    set 'saved either demo [select demo-saved name] [t]
     set 'chosen none
     change-text t
 ]
 
-save-file: does [
-    api-put rejoin ["/api/file?path=" enhex path] text
-    saved: text
+save-file: function [] [
+    either demo [
+        put demo path text
+        put demo-saved path text
+        download last split path #"/" text
+    ] [
+        api-put rejoin ["/api/file?path=" enhex path] text
+    ]
+    set 'saved text
     toast "Saved"
-    refresh
+    redraw
 ]
 
 ; New text, from any change: read it again; text that does not load keeps the last design.
@@ -61,7 +86,7 @@ change-text: function [t [string!]] [
         set 'problem none
         set 'd e
     ]
-    refresh
+    redraw
 ]
 
 edit: function [t [string! none!]] [if t [change-text t]]
@@ -108,7 +133,7 @@ node-of: function [id list [block!]] [
     none
 ]
 
-refresh: does [
+redraw: function [] [
     file-state/text: case [
         problem ["Not saved: the code does not load"]
         text = saved ["Saved"]
@@ -131,7 +156,7 @@ refresh: does [
     show-props
 ]
 
-show-props: does [
+show-props: function [] [
     f: the-face
     props/hidden: not f
     nothing-chosen/hidden: to logic! f
@@ -157,13 +182,13 @@ has-rule?: function [f name [word!]] [
     false
 ]
 
-choose: function [id] [
+choose-face: function [id] [
     set 'chosen id
     show-props
 ]
 
 ; up: the sibling before goes after it; down: it goes after the sibling after it
-move: function [by [integer!]] [
+step-face: function [by [integer!]] [
     f: the-face
     unless f [exit]
     r: face-range d f
@@ -176,9 +201,9 @@ move: function [by [integer!]] [
         ]
     ]
     either by > 0 [
-        if after [edit move-face d f after  set 'chosen chosen + 1 + count-inside after  refresh]
+        if after [edit move-face d f after  set 'chosen chosen + 1 + count-inside after  redraw]
     ] [
-        if before [edit move-face/before d f before  set 'chosen chosen - 1 - count-inside before  refresh]
+        if before [edit move-face/before d f before  set 'chosen chosen - 1 - count-inside before  redraw]
     ]
 ]
 
@@ -198,7 +223,7 @@ reorder: function [parent from [integer!] to [integer!]] [
         edit move-face/before d f g
         set 'chosen b/id
     ]
-    refresh
+    redraw
 ]
 
 ; how many faces of the structure a face holds: the chosen index jumps them
@@ -236,7 +261,7 @@ view [
     global nothing: text muted hidden "This project has no .trb files yet."
     grid [1 2 1] [
         panel "Structure" pad 4 [
-            global structure: tree [name] reorder on-select [choose row/id]
+            global structure: tree [name] reorder on-select [choose-face row/id]
                 on-reorder [reorder event/parent event/from event/to]
         ]
         column [
@@ -268,9 +293,9 @@ view [
                 ]
                 global required-f: check "Required" on-change [edit toggle-flag d the-face 'required]
                 row [
-                    button #arrow-up "Up" [move -1]
-                    button #arrow-down "Down" [move 1]
-                    button #trash "Delete" [edit remove-face d the-face  set 'chosen none  refresh]
+                    button #arrow-up "Up" [step-face -1]
+                    button #arrow-down "Down" [step-face 1]
+                    button #trash "Delete" [edit remove-face d the-face  set 'chosen none  redraw]
                 ]
             ]
         ]

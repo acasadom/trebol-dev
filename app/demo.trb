@@ -1,0 +1,36 @@
+Trebol [
+    title: "The project the designer shows with no server: on a web page, as a demo"
+    exports: [demo-files]
+]
+
+; Each file's name and text. Changes stay in the page; saving gives the file to download.
+demo-files: make map! reduce [
+    "app.trb" {Trebol [title: "Workshop"]
+
+; the board of the workshop: book a repair, see what is in
+view [
+    title "Bike workshop"
+    text muted "Book a repair and we call you when it is ready."
+    booking: panel "Book a repair" [
+        form [
+            field name "Your name" required
+            field phone "Phone" required  ; we call when it is ready
+            choice bike "Bike" ["Road" "City" "Mountain" "Folding"]
+            date due "Due back"
+            area notes "What is wrong"
+            check rush "Rush job, 20% more"
+            submit "Book in" [toast "Booked in."]
+        ]
+    ]
+]
+}
+    "contact.trb" {Trebol [title: "Contact"]
+
+view [
+    heading "Write to us"
+    field email "Email" required email
+    area message "Message" required
+    button "Send" primary [toast "Sent."]
+]
+}
+]
