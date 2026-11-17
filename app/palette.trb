@@ -1,0 +1,120 @@
+Trebol [
+    title: "What the designer adds"
+    exports: [palette palette-code palette-menu]
+]
+
+; Each group of the Add menu: a title, then for each item the word the menu gives, its text and the code
+; it adds. Every style of the dialect is here; app.test.trb lays each out to see that it loads with no problem.
+palette: [
+    "Layout" [
+        grid-2 "Two columns" {grid 2 [
+    text "Left"
+    text "Right"
+]}
+        grid-3 "Three columns" {grid 3 [
+    text "One"
+    text "Two"
+    text "Three"
+]}
+        grid-side "Side column and content" {grid [small 1] [
+    panel "Side" []
+    panel "Content" []
+]}
+        row "Row" {row []}
+        column "Column" {column []}
+        panel "Panel" {panel "Panel" []}
+        form "Form" {form []}
+        tabs "Tabs" {tabs [
+    "One" []
+    "Two" []
+]}
+        steps "Steps" {steps [
+    "One" []
+    "Two" []
+]}
+        split "Split" {split [
+    column []
+    column []
+]}
+        scroll "Scroll" {scroll "Scroll" []}
+        toolbar "Toolbar" {toolbar [
+    button "One"
+    button "Two"
+]}
+        dialog "Dialog" {dialog "Dialog" []}
+        desktop "Desktop of tiles" {desktop [
+    tile #folder "Tile" []
+]}
+        divider "Divider" {divider}
+    ]
+    "Text" [
+        title "Title" {title "Title"}
+        heading "Heading" {heading "Heading"}
+        text "Text" {text "Text"}
+        code "Code" {code "code"}
+        link "Link" {link "Link" https://trebol-lang.com}
+        icon "Icon" {icon #star}
+        breadcrumb "Breadcrumb" {breadcrumb ["Home" home "Here"]}
+    ]
+    "Input" [
+        field "Field" {field "Field"}
+        email "Email" {field email "Email" email}
+        password "Password" {password "Password"}
+        number "Number" {number "Number"}
+        money "Money" {money "Amount"}
+        date "Date" {date "Date"}
+        date-range "Dates from and to" {date-range "Dates"}
+        time "Time" {time "Time"}
+        area "Long text" {area "Long text"}
+        rich "Rich text" {rich "Rich text"}
+        rows "Rows" {rows "Rows" [field "Item"]}
+    ]
+    "Choice" [
+        check "Checkbox" {check "Checkbox"}
+        toggle "Switch" {toggle "Switch"}
+        choice "Choice" {choice "Choice" ["One" "Two"]}
+        radio "Options" {radio "Options" ["One" "Two"]}
+        segmented "Joined buttons" {radio "View" ["One" "Two"] segmented}
+        slider "Slider" {slider "Slider"}
+        lookup "Search and pick" {lookup "Search"}
+    ]
+    "Data" [
+        table "Table" {table [name "Name" date "Date"]}
+        list "List" {list [name "Name" note "Note"]}
+        tree "Tree" {tree [name]}
+        board "Board" {board by status [todo "To do" done "Done"]}
+        chart "Chart" {chart bar [month "Month" total "Total"]}
+        progress "Progress" {progress "Progress" 40%}
+    ]
+    "Action" [
+        button "Button" {button "Button"}
+        submit "Submit" {submit "Submit"}
+        tile "Tile" {tile #folder "Tile" []}
+    ]
+    "Media" [
+        image "Image" {image %picture.png "Picture"}
+        photo "Photo" {photo "Photo"}
+        upload "Upload" {upload "Files"}
+        video "Video" {video %video.mp4 "Video"}
+        audio "Sound" {audio %sound.m4a "Sound"}
+        canvas "Drawing" {canvas 120x120 [circle 60x60 50]}
+    ]
+]
+
+; the code an item adds
+palette-code: function [item [word!]] [
+    foreach [group items] palette [
+        foreach [w label code] items [if w = item [return code]]
+    ]
+    none
+]
+
+; the Add menu: a submenu per group
+palette-menu: function [] [
+    collect [
+        foreach [group items] palette [
+            keep group
+            keep/only collect [foreach [w label code] items [keep label  keep w]]
+        ]
+    ]
+]

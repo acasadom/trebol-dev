@@ -43,7 +43,7 @@ serve [
 "adding a face"
 [
     click {field name "Name"}
-    pick-menu "Add" "Checkbox"
+    pick-menu "Add" ["Choice" "Checkbox"]
     see {check "Checkbox"}
     click "Save"
     not none? find written {field name "Name"  ; theirs^/    check "Checkbox"^/]}
@@ -64,3 +64,22 @@ serve [
     click "Save"
     not none? find written {view [^/    field name "Name"  ; theirs^/    heading "Join us"^/]}
 ]
+
+"columns"
+[
+    click {heading "Join us"}
+    pick-menu "Add" ["Layout" "Two columns"]
+    see {grid 2}
+    click {grid 2}
+    type "Columns" "1 2 1"
+    pick-menu "Add" ["Text" "Heading"]
+    click "Save"
+    not none? find written {    grid [1 2 1] [^/        text "Left"^/        text "Right"^/        heading "Heading"^/    ]^/}
+]
+[
+    click {heading "Join us"}
+    pick-menu "Add" ["Layout" "Two columns"]
+    click {grid 2}
+    type "Columns" "0"
+    see "A number of columns"
+] 

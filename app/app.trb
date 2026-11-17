@@ -9,14 +9,13 @@ Trebol [
 
 import %model.trb
 import %demo.trb
+import %palette.trb
 import %trebol-code.js
 
-; what the palette adds, and the text each new face starts with
-kinds: [
-    heading "Heading" text "Text" field "Field" area "Long text" number "Number" date "Date"
-    choice "Choice" check "Checkbox" button "Button" row "Row" panel "Panel"
-]
-inputs: [field area number date choice check money email password time]
+; the styles whose faces are fields of a form: they have a name and can be required
+inputs: [field password number money date date-range time area rich check toggle choice radio upload photo lookup rows widget slider]
+; the styles whose block holds faces: what is added with one of them chosen goes inside it
+boxes: [view row column panel form grid scroll dialog]
 
 files: copy []
 path: none          ; the file being designed, from the project's folder
@@ -97,6 +96,8 @@ the-face: does [all [d chosen  pick faces-of d chosen]]
 face-name: function [f] [
     s: form style-word d f
     if l: face-label d f [s: rejoin [l ": " s]]
+    ; a grid says how it splits: grid 3, grid [1 2 1]
+    if all [f/style = 'grid  f/cols] [s: rejoin [s " " mold f/cols]]
     if f/name [s: rejoin [s " " f/name]]
     if string? f/text [
         t: f/text
@@ -168,10 +169,52 @@ show-props: function [] [
     unless f [exit]
     face-kind/text: face-name f
     text-f/value: either string? f/text [f/text] [""]
+    ; faces that hold others and show no text of their own have none to change
+    text-f/hidden: all [not string? f/text  find [view row column form grid split tabs steps toolbar desktop divider] f/style]
     name-f/hidden: not find inputs f/style
     name-f/value: either f/name [form f/name] [""]
     required-f/hidden: not find inputs f/style
     required-f/value: has-rule? f 'required
+    i: cols-at f
+    cols-f/hidden: not i
+    if i [cols-f/value: mold/only pick first face-range d f i]
+]
+
+; where the columns of a grid are written: grid 3 [...], grid [1 2 1] [...]; an index in its loaded block
+cols-at: function [f] [
+    unless all [f/style = 'grid  r: face-range d f] [return none]
+    i: r/2
+    while [i < r/3] [
+        v: pick r/1 i
+        if all [word? v  v = 'grid] [break]
+        i: i + 1
+    ]
+    i: i + 1
+    if all [i < r/3  any [integer? pick r/1 i  block? pick r/1 i]] [return i]
+    none
+]
+
+; what is typed as the columns: 3, or a weight per column (1 2 1), small, medium or large for a fixed width
+cols-of: function [value] [
+    v: attempt [load value]
+    case [
+        all [integer? v  v > 0  v <= 12] [v]
+        all [block? v  not empty? v  parse v [some [integer! | 'small | 'medium | 'large]]] [v]
+        true [none]
+    ]
+]
+
+set-cols: function [value] [
+    f: the-face
+    unless all [f  i: cols-at f  v: cols-of value] [exit]
+    edit replace-value d first face-range d f i v
+]
+
+; the loaded block that holds a box's faces
+pane-block: function [f] [
+    unless all [find boxes f/style  r: face-range d f] [return none]
+    b: pick r/1 r/3
+    either block? b [b] [none]
 ]
 
 ; a field's name is a word: letters, digits and - after a letter
@@ -278,19 +321,19 @@ count-inside: function [f] [
     n
 ]
 
-add-face: function [kind [word!]] [
-    label: select kinds kind
-    code: case [
-        find [row panel] kind [rejoin [kind " []"]]
-        true [rejoin [kind " " mold label]]
-    ]
-    either f: the-face [edit insert-after d f code] [
-        if empty? d/layouts [exit]
-        edit insert-into d d/layouts/1/block code
+; an item of the Add menu: inside the chosen face if it holds faces, else after it
+add-face: function [item [word!]] [
+    unless code: palette-code item [exit]
+    f: the-face
+    case [
+        all [f  b: pane-block f] [edit insert-into d b code]
+        f [edit insert-after d f code]
+        not empty? d/layouts [edit insert-into d d/layouts/1/block code]
     ]
 ]
 
-view [
+; the Add menu comes from the palette
+view compose/deep/only [
     width fill
     row spread middle [
         row middle [
@@ -307,12 +350,7 @@ view [
     global nothing: text muted hidden "This project has no .trb files yet."
     grid fit [small 1 medium] [
         panel "Structure" pad 2 [
-            button #plus "Add" small menu [
-                "Heading" heading "Text" text ---
-                "Field" field "Long text" area "Number" number "Date" date "Choice" choice "Checkbox" check ---
-                "Row" row "Panel" panel ---
-                "Button" button
-            ] on-menu [add-face event/picked]
+            global add-button: button #plus "Add" small menu (palette-menu) on-menu [add-face event/picked]
             global structure: tree [name] reorder on-select [choose-face row/id]
                 on-reorder [reorder event/parent event/from event/to]
         ]
@@ -336,6 +374,9 @@ view [
                     if true = name-ok? value [edit set-face-name d the-face either empty? value [none] [to word! value]]
                 ]
                 global required-f: check "Required" on-change [edit toggle-flag d the-face 'required]
+                global cols-f: field "Columns" hidden
+                    check [either cols-of value [true] ["A number of columns (3), or a weight for each (1 2 1); small, medium or large is a fixed width"]]
+                    [set-cols value]
                 row [
                     button #arrow-up "Up" [step-face -1]
                     button #arrow-down "Down" [step-face 1]

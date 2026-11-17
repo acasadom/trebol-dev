@@ -18,14 +18,16 @@ the middle the preview, the code, or both side by side (*Design*, *Split*, *Code
 
 - **Files**: every `.trb` file of the project, outside `node_modules` and hidden folders.
 - **Structure**: the faces of each `view` and `layout` in the file, nested as written. Drag a face among the
-  ones beside it to move it; *Up* and *Down* do the same. *Add* puts a heading, text, field, long text,
-  number, date, choice, checkbox, row, panel or button after the chosen face.
+  ones beside it to move it; *Up* and *Down* do the same. *Add* has every style of Trebol, in groups
+  (layout, text, input, choice, data, action, media): what it adds goes inside the chosen face when that face
+  holds others (a panel, a row, a grid...), and after it otherwise.
 - **Preview**: the screen as it looks, laid out without running any of the program's code. Click a face to
   choose it.
 - **Code**: the file itself, coloured as Trebol, with the chosen face marked. Put the cursor in a face to
   choose it. Change the code and the structure and preview follow; change the design and the code follows.
   Code that does not load says why, and is not saved.
-- **Properties**: the text a face shows, the name of a field, whether it is required; *Delete* takes it out.
+- **Properties**: the text a face shows, the name of a field, whether it is required, the columns of a grid
+  (`3`, a weight for each as `1 2 1`, or `small 1` for a fixed side column); *Delete* takes it out.
 
 A face chosen in one of them is chosen in all three.
 

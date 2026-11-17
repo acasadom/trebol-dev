@@ -220,12 +220,18 @@ remove-face: function ["The text without a face" d [object!] f [object!]] [
     cut d/text face-span d f
 ]
 
+; code of several lines, each line after the first indented as the place it goes
+indented: function [code [string!] indent [string!]] [
+    replace/all copy code newline rejoin [newline indent]
+]
+
 insert-after: function [
     "The text with new code on its own line after a face, indented as it is"
     d [object!] f [object!] code [string!]
 ] [
     s: face-span d f
-    splice d/text after-line d/text s/x + s/y 0 rejoin [newline indent-at d/text s/x code]
+    indent: indent-at d/text s/x
+    splice d/text after-line d/text s/x + s/y 0 rejoin [newline indent indented code indent]
 ]
 
 insert-into: function [
@@ -236,9 +242,15 @@ insert-into: function [
     foreach [blk sps own] d/blocks [if same? head blk head b [owner: own]]
     unless owner [return none]
     close: owner/x + owner/y - 1   ; the ]
-    if empty? b [return splice d/text close 0 code]
+    if empty? b [
+        ; [] becomes a block of lines: [, the code a step in, ] under the line it opens on
+        outer: indent-at d/text owner/x
+        inner: rejoin [outer "    "]
+        return splice d/text owner/x + 1 close - owner/x - 1 rejoin [newline inner indented code inner newline outer]
+    ]
     last-span: span-of d b length? b
-    splice d/text after-line d/text last-span/x + last-span/y 0 rejoin [newline indent-at d/text last-span/x code]
+    indent: indent-at d/text last-span/x
+    splice d/text after-line d/text last-span/x + last-span/y 0 rejoin [newline indent indented code indent]
 ]
 
 move-face: function [

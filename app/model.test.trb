@@ -47,7 +47,9 @@ import %sample.trb
     not none? find t {"Email"^/    field phone "Phone"^/    row [}]
 [d: design-of sample  t: insert-into d d/layouts/1/block {text "End"}
     not none? find t {    ]^/    text "End"^/]}]
-[d: design-of {view []}  {view [text "a"]} = insert-into d d/layouts/1/block {text "a"}]
+[d: design-of {view []}  {view [^/    text "a"^/]} = insert-into d d/layouts/1/block {text "a"}]
+[d: design-of {view [^/    panel "P" []^/]}  b: pick d/layouts/1/block 3
+    {view [^/    panel "P" [^/        grid 2 [^/            text "L"^/        ]^/    ]^/]} = insert-into d b {grid 2 [^/    text "L"^/]}]
 [d: design-of sample  b: pick d/layouts/1/block 12  t: insert-into d b {button "Help"}
     not none? find t {button "Back"^/        button "Help"^/    ]}]
 
