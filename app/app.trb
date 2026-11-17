@@ -9,6 +9,7 @@ Trebol [
 
 import %model.trb
 import %demo.trb
+import %trebol-code.js
 
 ; what the palette adds, and the text each new face starts with
 kinds: [
@@ -140,7 +141,7 @@ redraw: function [] [
         true ["Changed"]
     ]
     save-button/disabled: any [problem  text = saved  not path]
-    code-area/value: text
+    code-view/value: text
     problem-text/hidden: not problem
     problem-text/text: any [problem ""]
     unless d [exit]
@@ -149,10 +150,14 @@ redraw: function [] [
     if all [chosen  chosen > length? fs] [set 'chosen none]
     structure/selected: node-of chosen structure/data
     preview/pane: collect [foreach l d/layouts [if l/view [keep l/view/pane]]]
+    mark-chosen
     problems/data: collect [
         foreach l d/layouts [foreach [p m] l/problems [keep make map! reduce ['at any [loaded-at p ""] 'message m]]]
     ]
     problems/hidden: empty? problems/data
+    problem-count/text: either empty? problems/data ["No problems"] [
+        rejoin [length? problems/data either 1 = length? problems/data [" problem"] [" problems"]]
+    ]
     show-props
 ]
 
@@ -184,8 +189,48 @@ has-rule?: function [f name [word!]] [
 
 choose-face: function [id] [
     set 'chosen id
+    structure/selected: node-of chosen structure/data
+    mark-chosen
     show-props
 ]
+
+; the chosen face, marked in the preview and in the code
+mark-chosen: function [] [
+    f: the-face
+    preview/selected: f
+    s: all [f  face-span d f]
+    code-view/props: make code-view/props [mark: either s [reduce [s/x s/y]] [none]]
+]
+
+; a face clicked in the preview
+pick-face: function [f [object!]] [
+    if n: find/same faces-of d f [choose-face index? n]
+]
+
+; the cursor put in the code: the innermost face written around it
+caret-at: function [at [integer!]] [
+    unless d [exit]
+    best: none
+    n: 0
+    foreach f faces-of d [
+        n: n + 1
+        if all [s: face-span d f  at >= s/x  at <= (s/x + s/y)] [
+            if any [not best  s/y <= best/2] [best: reduce [n s/y]]
+        ]
+    ]
+    if all [best  best/1 <> chosen] [choose-face best/1]
+]
+
+; Design, Split or Code: what the middle shows
+show-mode: function [m] [
+    preview-pane/hidden: m = "Code"
+    code-pane/hidden: m = "Design"
+    centre/cols: either m = "Split" [[1 1]] [[1]]
+]
+
+; the code view colours the dialect's words: styles, and the words that change them
+code-words: make map! []
+foreach w ui-dialect-words [put code-words w either select styles w ['style] ['flag]]
 
 ; up: the sibling before goes after it; down: it goes after the sibling after it
 step-face: function [by [integer!]] [
@@ -247,44 +292,43 @@ add-face: function [kind [word!]] [
 
 view [
     width fill
-    row spread [
-        row [
+    row spread middle [
+        row middle [
             title "Trebol designer"
             global project-name: text muted ""
-        ]
-        row [
             global file-choice: choice "File" [] on-change [if value [open-file value]]
+        ]
+        global mode-f: radio mode "View" ["Design" "Split" "Code"] segmented on-change [show-mode value]
+        row middle [
             global file-state: text muted ""
             global save-button: button #check "Save" primary [save-file]
         ]
     ]
     global nothing: text muted hidden "This project has no .trb files yet."
-    grid [1 2 1] [
-        panel "Structure" pad 4 [
+    grid fit [small 1 medium] [
+        panel "Structure" pad 2 [
+            button #plus "Add" small menu [
+                "Heading" heading "Text" text ---
+                "Field" field "Long text" area "Number" number "Date" date "Choice" choice "Checkbox" check ---
+                "Row" row "Panel" panel ---
+                "Button" button
+            ] on-menu [add-face event/picked]
             global structure: tree [name] reorder on-select [choose-face row/id]
                 on-reorder [reorder event/parent event/from event/to]
         ]
-        column [
-            toolbar "Add" [
-                button #heading "Heading" [add-face 'heading]
-                button #type "Text" [add-face 'text]
-                button #edit "Field" [add-face 'field]
-                button #lines "Long text" [add-face 'area]
-                button #hash "Number" [add-face 'number]
-                button #calendar "Date" [add-face 'date]
-                button #dropdown "Choice" [add-face 'choice]
-                button #check-square "Checkbox" [add-face 'check]
-                button #pointer "Button" [add-face 'button]
-                button #columns "Row" [add-face 'row]
-                button #panel "Panel" [add-face 'panel]
+        global centre: grid fit [1 1] [
+            global preview-pane: panel "Preview" [
+                global preview: column inert on-select [pick-face event/face] []
+                global problems: table [at "Where" message "Problem"] hidden
             ]
-            panel "Preview" [
-                global preview: column []
+            global code-pane: panel "Code" pad 2 [
+                global problem-text: text danger hidden ""
+                global code-view: widget <trebol-code> fit [words: code-words mark: none] on-change [change-text value]
+                    on-caret [caret-at event/detail]
             ]
-            global problems: table [at "Where" message "Problem"] hidden
         ]
         panel "Properties" pad 4 [
-            global nothing-chosen: text muted "Choose a face in the structure to see its properties."
+            global nothing-chosen: text muted "Choose a face in the structure, the preview or the code."
             global props: column hidden [
                 global face-kind: code ""
                 global text-f: field "Text" [edit set-face-text d the-face value]
@@ -295,15 +339,13 @@ view [
                 row [
                     button #arrow-up "Up" [step-face -1]
                     button #arrow-down "Down" [step-face 1]
-                    button #trash "Delete" [edit remove-face d the-face  set 'chosen none  redraw]
+                    button #trash "Delete" danger [edit remove-face d the-face  set 'chosen none  redraw]
                 ]
             ]
         ]
     ]
-    panel "Code" [
-        global problem-text: text danger hidden ""
-        global code-area: area "Code" [change-text value]
-    ]
+    global problem-count: text muted small "No problems"
 ]
 
+mode-f/value: "Split"
 read-files

@@ -43,7 +43,7 @@ serve [
 "adding a face"
 [
     click {field name "Name"}
-    click "Checkbox"
+    pick-menu "Add" "Checkbox"
     see {check "Checkbox"}
     click "Save"
     not none? find written {field name "Name"  ; theirs^/    check "Checkbox"^/]}

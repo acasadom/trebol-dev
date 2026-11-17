@@ -13,15 +13,21 @@ It opens on <http://localhost:5180/> (`--port` picks another). Only this machine
 
 ## What it does
 
+The window holds it all, with no page scroll: the structure on the left, the properties on the right, and in
+the middle the preview, the code, or both side by side (*Design*, *Split*, *Code*). Each part scrolls by itself.
+
 - **Files**: every `.trb` file of the project, outside `node_modules` and hidden folders.
 - **Structure**: the faces of each `view` and `layout` in the file, nested as written. Drag a face among the
-  ones beside it to move it; *Up* and *Down* do the same.
-- **Preview**: the screen as it looks, laid out without running any of the program's code.
+  ones beside it to move it; *Up* and *Down* do the same. *Add* puts a heading, text, field, long text,
+  number, date, choice, checkbox, row, panel or button after the chosen face.
+- **Preview**: the screen as it looks, laid out without running any of the program's code. Click a face to
+  choose it.
+- **Code**: the file itself, coloured as Trebol, with the chosen face marked. Put the cursor in a face to
+  choose it. Change the code and the structure and preview follow; change the design and the code follows.
+  Code that does not load says why, and is not saved.
 - **Properties**: the text a face shows, the name of a field, whether it is required; *Delete* takes it out.
-- **Add**: a heading, text, field, long text, number, date, choice, checkbox, button, row or panel, after the
-  chosen face.
-- **Code**: the file itself. Change it here and the structure and preview follow; change the design and the
-  code follows. Code that does not load says why, and is not saved.
+
+A face chosen in one of them is chosen in all three.
 
 *Save* writes the file. Leaving a file with changes asks first.
 
@@ -35,6 +41,12 @@ replaces the old string, a face that moves takes its comment with it, a face tha
 ## On a web page
 
 With no project behind it, as on trebol-lang.com, it shows a sample project; *Save* downloads the file.
+
+## Building the code editor
+
+The code view is CodeMirror 6, built into one file, `app/trebol-code.js`, from `editor/trebol-code.js`:
+`npm install` and `npm run build:editor`. The built file is kept in the repository, so the designer needs
+nothing else to run.
 
 ## License
 

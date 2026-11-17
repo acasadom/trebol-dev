@@ -32,9 +32,19 @@
   },
   "scripts": {
     "test": "node --test && trebol test app",
-    "start": "node bin/trebol-dev.js"
+    "start": "node bin/trebol-dev.js",
+    "build:editor": "esbuild editor/trebol-code.js --bundle --minify --format=esm --target=es2022 --legal-comments=eof --outfile=app/trebol-code.js"
   },
   "dependencies": {
     "trebol": "^0.3.0"
+  },
+  "devDependencies": {
+    "@codemirror/commands": "^6.11.1",
+    "@codemirror/language": "^6.13.1",
+    "@codemirror/search": "^6.7.2",
+    "@codemirror/state": "^6.7.6",
+    "@codemirror/view": "^6.43.15",
+    "@lezer/highlight": "^1.2.5",
+    "esbuild": "^0.28.2"
   }
 }
