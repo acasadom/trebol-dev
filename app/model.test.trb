@@ -1,0 +1,69 @@
+Trebol [
+    title: "The model of the designer: reading a file and changing its text"
+    app: none
+]
+
+import %model.trb
+import %sample.trb
+
+"reading"
+[d: design-of sample  d/header/1 = 1x6]
+[d: design-of sample  1 = length? d/layouts]
+[d: design-of sample  [heading field field row button button] = collect [foreach f faces-of d [keep f/style]]]
+[d: design-of sample  (face-code d second faces-of d) = {who: field name "Name" required}]
+[d: design-of sample  (face-code d fourth faces-of d) = {row [
+        button "Save" [save-it]
+        button "Back"
+    ]}]
+[d: design-of sample  (face-code d fifth faces-of d) = {button "Save" [save-it]}]
+[d: design-of "x: 1"  empty? d/layouts]
+[d: design-of {view [text "😀" text "b"]}  (face-code d second faces-of d) = {text "b"}]
+
+"text of a face"
+[d: design-of sample  t: set-face-text d first faces-of d "Welcome"
+    not none? find t {heading "Welcome"^/    who:}]
+[d: design-of sample  t: set-face-text d second faces-of d "Full name"
+    not none? find t {who: field name "Full name" required  ; theirs}]
+[d: design-of {view [button [go]]}  {view [button "Go" [go]]} = set-face-text d first faces-of d "Go"]
+[d: design-of {view [field name]}  {view [field name "Name"]} = set-face-text d first faces-of d "Name"]
+
+"flags"
+[d: design-of sample  t: toggle-flag d second faces-of d 'required
+    not none? find t {who: field name "Name"  ; theirs}]
+[d: design-of sample  t: toggle-flag d third faces-of d 'required
+    not none? find t {field email "Email" required^/}]
+
+"removing"
+[d: design-of sample  t: remove-face d first faces-of d
+    not none? find t {view [^/    who: field}]
+[d: design-of sample  t: remove-face d second faces-of d
+    not none? find t {"Join us"^/    field email}]
+[d: design-of {view [text "a" text "b"]}  {view [text "a"]} = remove-face d second faces-of d]
+[d: design-of sample  t: remove-face d fourth faces-of d
+    not none? find t {"Email"^/]}]
+
+"adding"
+[d: design-of sample  t: insert-after d third faces-of d {field phone "Phone"}
+    not none? find t {"Email"^/    field phone "Phone"^/    row [}]
+[d: design-of sample  t: insert-into d d/layouts/1/block {text "End"}
+    not none? find t {    ]^/    text "End"^/]}]
+[d: design-of {view []}  {view [text "a"]} = insert-into d d/layouts/1/block {text "a"}]
+[d: design-of sample  b: pick d/layouts/1/block 12  t: insert-into d b {button "Help"}
+    not none? find t {button "Back"^/        button "Help"^/    ]}]
+
+"moving"
+[d: design-of sample  fs: faces-of d  t: move-face d first fs third fs
+    not none? find t {[^/    who: field name "Name" required  ; theirs^/    field email "Email"^/    heading "Join us"^/    row}]
+[d: design-of sample  fs: faces-of d  t: move-face d third fs first fs
+    not none? find t {heading "Join us"^/    field email "Email"^/    who:}]
+
+"every edit keeps the comments and loads"
+[d: design-of sample  fs: faces-of d
+    ok: true
+    foreach t reduce [
+        set-face-text d first fs "X"  toggle-flag d second fs 'required  remove-face d fourth fs
+        insert-after d third fs {text "x"}  move-face d first fs fifth fs
+    ] [
+        unless all [find t "; who signs up"  block? try [load t]] [ok: false]
+    ]
+    ok]

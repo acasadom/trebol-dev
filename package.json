@@ -1,0 +1,23 @@
+{
+  "name": "trebol-dev",
+  "version": "0.0.1",
+  "description": "The visual designer for Trebol: lays out screens with Trebol's faces and writes the Trebol code back, keeping yours as you wrote it.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "homepage": "https://trebol-lang.com/",
+  "keywords": ["trebol", "designer", "devtools"],
+  "bin": {
+    "trebol-dev": "bin/trebol-dev.js"
+  },
+  "files": ["bin", "server", "app", "README.md", "LICENSE"],
+  "engines": {
+    "node": ">=22.18"
+  },
+  "scripts": {
+    "test": "node --test && trebol test app",
+    "start": "node bin/trebol-dev.js"
+  },
+  "dependencies": {
+    "trebol": "file:../trebol"
+  }
+}

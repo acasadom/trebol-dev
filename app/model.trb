@@ -1,0 +1,303 @@
+Trebol [
+    title: "The design of a file: its text, its values and faces, and the edits that change the text"
+    exports: [
+        design-of spot-of span-of face-range face-span face-code faces-of
+        splice replace-value remove-face insert-after insert-into move-face
+        set-face-text toggle-flag
+    ]
+]
+
+; The text is the truth. A design is what can be read from it: its values (load/all), where each
+; sits (load-spans) and the faces of each layout in it, laid out without running anything
+; (ui-sketch). Every edit gives new text that changes only what it must, so comments, spacing and
+; order stay as they were written; the designer reads the new text again.
+
+spot-move: function [
+    "Moves the cursor of a walk over the text to a character index, counting lines and columns as loaded-at does"
+    st [object!] text [string!] to [integer!]
+] [
+    while [st/i < to] [
+        c: pick text st/i
+        either c = newline [st/line: st/line + 1  st/col: 1] [
+            ; columns count UTF-16 units, as the lexer and editors do
+            st/col: st/col + either c > #"^(FFFF)" [2] [1]
+        ]
+        st/i: st/i + 1
+    ]
+]
+
+design-of: function [
+    "What the designer reads from a file's text: values, where each sits, and the faces of its layouts"
+    text [string!]
+] [
+    values: load/all text
+    spans: load-spans text
+    ; load drops a script header; its two spans come first
+    header: none
+    if (length? spans) > length? values [
+        header: copy/part spans 2
+        spans: skip spans 2
+    ]
+    d: make object! [
+        text: none values: none header: none
+        spots: none     ; "line:col" -> [span block index]
+        blocks: none    ; [block spans own ...]: each loaded block, its values' spans and its own (none at the top)
+        layouts: none   ; block of objects: kind block view problems
+    ]
+    d/text: text
+    d/values: values
+    d/header: header
+    d/spots: make map! []
+    d/blocks: copy []
+    st: make object! [i: 1 line: 1 col: 1]
+    ; spans in walk order are in text order: a block's own span comes before its values'
+    walk: function [vals sps own-span] [
+        append d/blocks reduce [vals sps own-span]
+        repeat n length? vals [
+            sp: pick sps n
+            own: either block? sp [first sp] [sp]
+            spot-move st text own/x
+            put d/spots rejoin [st/line ":" st/col] reduce [own vals n]
+            if block? sp [walk pick vals n  next sp  own]
+        ]
+    ]
+    walk values spans none
+    d/layouts: copy []
+    find-layouts: function [code] [
+        parse code [any [
+            p: ['view | 'layout | path! if (find [view layout] first first p)]
+            opt ['compose | path! if ('compose = first first next p)]
+            set b block! (
+                r: ui-sketch b
+                k: either path? first p [first first p] [first p]
+                append d/layouts make object! [kind: k  block: b  view: r/1  problems: r/2]
+                find-layouts b
+            )
+            | set b [block! | paren!] (find-layouts b)
+            | skip
+        ]]
+    ]
+    find-layouts values
+    d
+]
+
+spot-of: function [
+    "Where a value sits, from its place (loaded-at, a face's place or written): [span block index], or none"
+    d [object!] place [string! none!]
+] [
+    unless place [return none]
+    ; a place may start with a file name: the line and column are the last two parts
+    parts: split place #":"
+    n: length? parts
+    if n < 2 [return none]
+    select d/spots rejoin [pick parts n - 1 ":" last parts]
+]
+
+spans-of: function [
+    "The spans of the values of a loaded block of the design"
+    d [object!] b [block! paren!]
+] [
+    foreach [blk sps own] d/blocks [if same? head blk head b [return sps]]
+    none
+]
+
+span-of: function [
+    "Where the value at an index of a loaded block sits in the text: index x length"
+    d [object!] b [block! paren!] n [integer!]
+] [
+    sp: pick spans-of d b n
+    either block? sp [first sp] [sp]
+]
+
+face-range: function [
+    "The values a face was written with: [block first last], indexes in the loaded block; none if made at run time"
+    d [object!] f [object!]
+] [
+    unless f/written [return none]
+    a: spot-of d f/written/1
+    z: spot-of d f/written/2
+    unless all [a z  same? a/2 z/2] [return none]
+    reduce [a/2 a/3 z/3]
+]
+
+face-span: function [
+    "Where the text of a face sits: index x length"
+    d [object!] f [object!]
+] [
+    unless r: face-range d f [return none]
+    a: span-of d r/1 r/2
+    z: span-of d r/1 r/3
+    as-pair a/x z/x + z/y - a/x
+]
+
+face-code: function ["The text a face was written with" d [object!] f [object!]] [
+    s: face-span d f
+    copy/part at d/text s/x s/y
+]
+
+faces-of: function [
+    "Every face of the design's layouts that was written in the text, in order, nested ones after their parent"
+    d [object!]
+] [
+    out: copy []
+    walk: function [fs] [
+        foreach f fs [
+            if face-range d f [append out f]
+            if block? f/pane [walk f/pane]
+        ]
+    ]
+    foreach l d/layouts [if l/view [walk l/view/pane]]
+    out
+]
+
+; --- edits: each takes a design and gives the new text --------------------------------------
+
+splice: function [
+    "The text with length characters at an index replaced by new text"
+    text [string!] at-index [integer!] len [integer!] new [string!]
+] [
+    t: copy text
+    change/part at t at-index new len
+    t
+]
+
+line-start: function ["The index where the line holding an index starts" text [string!] n [integer!]] [
+    while [all [n > 1  newline <> pick text n - 1]] [n: n - 1]
+    n
+]
+
+indent-at: function ["The spaces and tabs that start the line holding an index" text [string!] n [integer!]] [
+    s: line-start text n
+    e: s
+    while [all [e <= length? text  find " ^-" pick text e]] [e: e + 1]
+    copy/part at text s e - s
+]
+
+blank?: function ["Whether text holds only spaces and tabs" s [string!]] [
+    parse s [any [#" " | #"^-"]]
+]
+
+replace-value: function [
+    "The text with the value at an index of a loaded block written anew"
+    d [object!] b [block! paren!] n [integer!] new [any-type!]
+] [
+    s: span-of d b n
+    splice d/text s/x s/y mold :new
+]
+
+cut: function [
+    "The text without the characters of a span, and its line too when nothing else is on it"
+    text [string!] s [pair!]
+] [
+    from: s/x
+    stop: s/x + s/y
+    before: copy/part at text line-start text from from - line-start text from
+    rest: find/tail at text stop newline
+    after: copy/part at text stop either rest [(index? rest) - 1 - stop] [length? at text stop]
+    ; trailing comments go with the value when it is alone on its line
+    if all [blank? before  any [blank? after  #";" = first trim/head copy after]] [
+        from: line-start text from
+        stop: either rest [index? rest] [1 + length? text]
+        ; the last line of the text has no newline after it: take the one before
+        if all [not rest  from > 1] [from: from - 1]
+        return splice text from stop - from ""
+    ]
+    ; otherwise the spaces before it go too
+    while [all [from > 1  find " ^-" pick text from - 1]] [from: from - 1]
+    splice text from stop - from ""
+]
+
+remove-face: function ["The text without a face" d [object!] f [object!]] [
+    cut d/text face-span d f
+]
+
+insert-after: function [
+    "The text with new code on its own line after a face, indented as it is"
+    d [object!] f [object!] code [string!]
+] [
+    s: face-span d f
+    at-index: s/x + s/y
+    splice d/text at-index 0 rejoin [newline indent-at d/text s/x code]
+]
+
+insert-into: function [
+    "The text with new code as the last value of a loaded block (a layout or a panel's block)"
+    d [object!] b [block!] code [string!]
+] [
+    owner: none
+    foreach [blk sps own] d/blocks [if same? head blk head b [owner: own]]
+    unless owner [return none]
+    close: owner/x + owner/y - 1   ; the ]
+    if empty? b [return splice d/text close 0 code]
+    last-span: span-of d b length? b
+    splice d/text last-span/x + last-span/y 0 rejoin [newline indent-at d/text last-span/x code]
+]
+
+move-face: function [
+    "The text with a face moved after another face"
+    d [object!] f [object!] target [object!]
+] [
+    code: face-code d f
+    s: face-span d f
+    t: face-span d target
+    if s = t [return d/text]
+    either t/x > s/x [
+        ; the later place first, so the earlier one stays where it was
+        text: splice d/text t/x + t/y 0 rejoin [newline indent-at d/text t/x code]
+        cut text s
+    ] [
+        text: cut d/text s
+        splice text t/x + t/y 0 rejoin [newline indent-at d/text t/x code]
+    ]
+]
+
+text-index: function [
+    "The index in its block of the string a face shows, or none; the first string after its style and name"
+    d [object!] f [object!]
+] [
+    r: face-range d f
+    b: r/1
+    n: r/2
+    while [n <= r/3] [
+        v: pick b n
+        if string? :v [return n]
+        ; the action block or anything after it is not the face's text
+        if block? :v [return none]
+        n: n + 1
+    ]
+    none
+]
+
+style-index: function ["The index in its block of a face's style word" d [object!] f [object!]] [
+    r: face-range d f
+    n: r/2
+    while [not all [word? pick r/1 n  (pick r/1 n) = f/style]] [n: n + 1]
+    n
+]
+
+set-face-text: function [
+    "The text with the string a face shows changed, or added after its style and name"
+    d [object!] f [object!] new [string!]
+] [
+    if n: text-index d f [return replace-value d first face-range d f n new]
+    r: face-range d f
+    n: style-index d f
+    if all [f/name  n < r/3  f/name = pick r/1 n + 1] [n: n + 1]
+    s: span-of d r/1 n
+    splice d/text s/x + s/y 0 rejoin [" " mold new]
+]
+
+toggle-flag: function [
+    "The text with a flag word of a face taken out if it has it, or put after its text"
+    d [object!] f [object!] flag [word!]
+] [
+    r: face-range d f
+    n: r/2
+    while [n <= r/3] [
+        if all [word? pick r/1 n  flag = pick r/1 n  n > style-index d f] [return cut d/text span-of d r/1 n]
+        n: n + 1
+    ]
+    n: any [text-index d f  style-index d f]
+    s: span-of d r/1 n
+    splice d/text s/x + s/y 0 rejoin [" " flag]
+]
