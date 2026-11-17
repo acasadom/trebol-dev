@@ -73,3 +73,18 @@ import %sample.trb
     not none? find t {required  ; theirs^/    text "x"^/    field email}]
 [d: design-of {view [^/    text "a"  ; one^/    text "b"  ; two^/]}  fs: faces-of d
     {view [^/    text "b"  ; two^/    text "a"  ; one^/]} = move-face d first fs second fs]
+
+"labels and names"
+[d: design-of sample  'who = face-label d second faces-of d]
+[d: design-of sample  none? face-label d first faces-of d]
+[d: design-of {view [global box: panel []]}  'box = face-label d first faces-of d]
+[d: design-of sample  t: set-face-name d third faces-of d 'mail
+    not none? find t {field mail "Email"}]
+[d: design-of {view [field "Name"]}  {view [field name "Name"]} = set-face-name d first faces-of d 'name]
+[d: design-of {view [field name "Name"]}  {view [field "Name"]} = set-face-name d first faces-of d none]
+
+"moving before"
+[d: design-of sample  fs: faces-of d  t: move-face/before d third fs first fs
+    not none? find t {view [^/    field email "Email"^/    heading "Join us"}]
+[d: design-of {view [^/    text "a"^/    text "b"  ; two^/]}  fs: faces-of d
+    {view [^/    text "b"  ; two^/    text "a"^/]} = move-face/before d second fs first fs]

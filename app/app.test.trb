@@ -48,3 +48,19 @@ serve [
     click "Save"
     not none? find written {field name "Name"  ; theirs^/    check "Checkbox"^/]}
 ]
+
+"the name of a field"
+[
+    click {field name "Name"}
+    type "Field name" "full-name"
+    see {field full-name "Name"}
+    type "Field name" "2x"
+    see "A name starts with a letter"
+]
+
+"dragging in the structure"
+[
+    drag {field name "Name"} {heading "Join us"}
+    click "Save"
+    not none? find written {view [^/    field name "Name"  ; theirs^/    heading "Join us"^/]}
+]

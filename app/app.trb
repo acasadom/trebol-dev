@@ -70,6 +70,7 @@ the-face: does [all [d chosen  pick faces-of d chosen]]
 
 face-name: function [f] [
     s: form f/style
+    if l: face-label d f [s: rejoin [l ": " s]]
     if f/name [s: rejoin [s " " f/name]]
     if string? f/text [
         t: f/text
@@ -137,9 +138,19 @@ show-props: does [
     unless f [exit]
     face-kind/text: face-name f
     text-f/value: either string? f/text [f/text] [""]
+    name-f/hidden: not find inputs f/style
+    name-f/value: either f/name [form f/name] [""]
     required-f/hidden: not find inputs f/style
     required-f/value: has-rule? f 'required
 ]
+
+; a field's name is a word: letters, digits and - after a letter
+name-ok?: function [value] [
+    if any [none? value  empty? value] [return true]
+    either parse value [letter any [letter | digit | #"-"]] [true] ["A name starts with a letter and holds letters, digits and -"]
+]
+letter: charset [#"a" - #"z" #"A" - #"Z"]
+digit: charset "0123456789"
 
 has-rule?: function [f name [word!]] [
     if f/rules [foreach r f/rules [if all [block? r  name = first r] [return true]]]
@@ -167,8 +178,27 @@ move: function [by [integer!]] [
     either by > 0 [
         if after [edit move-face d f after  set 'chosen chosen + 1 + count-inside after  refresh]
     ] [
-        if before [edit move-face d before f  set 'chosen chosen - 1 - count-inside before  refresh]
+        if before [edit move-face/before d f before  set 'chosen chosen - 1 - count-inside before  refresh]
     ]
+]
+
+; a row dragged in the structure: its face goes where it was dropped among its siblings
+reorder: function [parent from [integer!] to [integer!]] [
+    list: either parent [parent/children] [structure/data]
+    fs: faces-of d
+    ; the tree has moved the row already: it is at to, and the one it went beside next to it
+    a: pick list to
+    b: pick list either to > from [to - 1] [to + 1]
+    f: pick fs a/id
+    g: pick fs b/id
+    either to > from [
+        edit move-face d f g
+        set 'chosen b/id + (count-inside g) - count-inside f
+    ] [
+        edit move-face/before d f g
+        set 'chosen b/id
+    ]
+    refresh
 ]
 
 ; how many faces of the structure a face holds: the chosen index jumps them
@@ -206,7 +236,8 @@ view [
     global nothing: text muted hidden "This project has no .trb files yet."
     grid [1 2 1] [
         panel "Structure" pad 4 [
-            global structure: tree [name] on-select [choose row/id]
+            global structure: tree [name] reorder on-select [choose row/id]
+                on-reorder [reorder event/parent event/from event/to]
         ]
         column [
             toolbar "Add" [
@@ -232,6 +263,9 @@ view [
             global props: column hidden [
                 global face-kind: code ""
                 global text-f: field "Text" [edit set-face-text d the-face value]
+                global name-f: field "Field name" check [name-ok? value] [
+                    if true = name-ok? value [edit set-face-name d the-face either empty? value [none] [to word! value]]
+                ]
                 global required-f: check "Required" on-change [edit toggle-flag d the-face 'required]
                 row [
                     button #arrow-up "Up" [move -1]

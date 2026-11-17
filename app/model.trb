@@ -3,7 +3,7 @@ Trebol [
     exports: [
         design-of spot-of span-of face-range face-span face-code faces-of
         splice replace-value remove-face insert-after insert-into move-face
-        set-face-text toggle-flag
+        set-face-text set-face-name face-label toggle-flag
     ]
 ]
 
@@ -242,21 +242,28 @@ insert-into: function [
 ]
 
 move-face: function [
-    "The text with a face moved after another face"
+    "The text with a face moved after another face, or before it"
     d [object!] f [object!] target [object!]
+    /before "Before the other face"
 ] [
     s: face-span d f
     ; a comment after the face on its line goes with it
     code: copy/part at d/text s/x (after-line d/text s/x + s/y) - s/x
     t: face-span d target
     if s = t [return d/text]
-    either t/x > s/x [
-        ; the later place first, so the earlier one stays where it was
-        text: splice d/text after-line d/text t/x + t/y 0 rejoin [newline indent-at d/text t/x code]
-        cut text s
+    indent: indent-at d/text t/x
+    either before [
+        at-index: t/x
+        piece: rejoin [code newline indent]
     ] [
-        text: cut d/text s
-        splice text after-line text t/x + t/y 0 rejoin [newline indent-at d/text t/x code]
+        at-index: after-line d/text t/x + t/y
+        piece: rejoin [newline indent code]
+    ]
+    ; the later place first, so the earlier one stays where it was
+    either at-index > s/x [
+        cut splice d/text at-index 0 piece s
+    ] [
+        splice cut d/text s at-index 0 piece
     ]
 ]
 
@@ -309,4 +316,25 @@ toggle-flag: function [
     n: any [text-index d f  style-index d f]
     s: span-of d r/1 n
     splice d/text s/x + s/y 0 rejoin [" " flag]
+]
+
+face-label: function ["The word a face is set to, sign-up: panel, or none" d [object!] f [object!]] [
+    r: face-range d f
+    v: pick r/1 r/2
+    if all [word? :v  'global = v] [v: pick r/1 r/2 + 1]
+    either set-word? :v [to word! v] [none]
+]
+
+set-face-name: function [
+    "The text with the name of a face's value changed, or added after its style; none takes it out"
+    d [object!] f [object!] new [word! none!]
+] [
+    r: face-range d f
+    n: style-index d f
+    if all [f/name  n < r/3  f/name = pick r/1 n + 1] [
+        return either new [replace-value d r/1 n + 1 new] [cut d/text span-of d r/1 n + 1]
+    ]
+    unless new [return d/text]
+    s: span-of d r/1 n
+    splice d/text s/x + s/y 0 rejoin [" " new]
 ]
