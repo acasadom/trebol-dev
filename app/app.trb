@@ -1,0 +1,250 @@
+Trebol [
+    title: "Trebol designer"
+    description: "Lays out the screens of a Trebol project and writes the code back, as you wrote it."
+]
+
+; The designer of a project's screens. The file's text is the truth: every change, made on the
+; structure, the properties or the code itself, gives new text, and the design is read from it
+; again. Saving writes the text back through the file API of server/files.js.
+
+import %model.trb
+
+; what the palette adds, and the text each new face starts with
+kinds: [
+    heading "Heading" text "Text" field "Field" area "Long text" number "Number" date "Date"
+    choice "Choice" check "Checkbox" button "Button" row "Row" panel "Panel"
+]
+inputs: [field area number date choice check money email password time]
+
+files: copy []
+path: none          ; the file being designed, from the project's folder
+text: ""            ; its text now
+saved: ""           ; its text as last read or saved
+d: none             ; the design read from text
+chosen: none        ; the index of the chosen face in faces-of d
+problem: none       ; why the text does not load, when it does not
+
+; the file API answers only the designer's own pages, which say so with this header
+api-get: func [url] [fetch/with url [headers: [X-Trebol-Dev "1"]]]
+api-put: func [url content] [fetch/with url [method: 'PUT  body: content  headers: [X-Trebol-Dev "1"]]]
+
+read-files: does [
+    r: api-get "/api/files"
+    project-name/text: r/name
+    files: r/files
+    file-choice/options: files
+    either empty? files [nothing/hidden: false] [open-file first files]
+]
+
+open-file: function [name [string!]] [
+    set 'path name
+    file-choice/value: name
+    t: api-get rejoin ["/api/file?path=" enhex name]
+    set 'saved t
+    set 'chosen none
+    change-text t
+]
+
+save-file: does [
+    api-put rejoin ["/api/file?path=" enhex path] text
+    saved: text
+    toast "Saved"
+    refresh
+]
+
+; New text, from any change: read it again; text that does not load keeps the last design.
+change-text: function [t [string!]] [
+    set 'text t
+    either error? e: try [design-of t] [
+        set 'problem form e/message
+    ] [
+        set 'problem none
+        set 'd e
+    ]
+    refresh
+]
+
+edit: function [t [string! none!]] [if t [change-text t]]
+
+the-face: does [all [d chosen  pick faces-of d chosen]]
+
+face-name: function [f] [
+    s: form f/style
+    if f/name [s: rejoin [s " " f/name]]
+    if string? f/text [
+        t: f/text
+        ; long texts are cut, so the structure stays narrow
+        if 20 < length? t [t: rejoin [copy/part t 19 "…"]]
+        s: rejoin [s " " mold t]
+    ]
+    s
+]
+
+; the structure: every face written in the file, nested as written
+nodes-of: function [fs [block!] all-faces [block!]] [
+    collect [
+        foreach f fs [
+            either n: find/same all-faces f [
+                node: make map! reduce ['id index? n 'name face-name f]
+                if block? f/pane [
+                    node/children: nodes-of f/pane all-faces
+                    node/expanded: true
+                ]
+                keep node
+            ] [
+                if block? f/pane [keep nodes-of f/pane all-faces]
+            ]
+        ]
+    ]
+]
+
+node-of: function [id list [block!]] [
+    unless id [return none]
+    foreach n list [
+        if n/id = id [return n]
+        if n/children [if found: node-of id n/children [return found]]
+    ]
+    none
+]
+
+refresh: does [
+    file-state/text: case [
+        problem ["Not saved: the code does not load"]
+        text = saved ["Saved"]
+        true ["Changed"]
+    ]
+    save-button/disabled: any [problem  text = saved  not path]
+    code-area/value: text
+    problem-text/hidden: not problem
+    problem-text/text: any [problem ""]
+    unless d [exit]
+    fs: faces-of d
+    structure/data: collect [foreach l d/layouts [if l/view [keep nodes-of l/view/pane fs]]]
+    if all [chosen  chosen > length? fs] [set 'chosen none]
+    structure/selected: node-of chosen structure/data
+    preview/pane: collect [foreach l d/layouts [if l/view [keep l/view/pane]]]
+    problems/data: collect [
+        foreach l d/layouts [foreach [p m] l/problems [keep make map! reduce ['at any [loaded-at p ""] 'message m]]]
+    ]
+    problems/hidden: empty? problems/data
+    show-props
+]
+
+show-props: does [
+    f: the-face
+    props/hidden: not f
+    nothing-chosen/hidden: to logic! f
+    unless f [exit]
+    face-kind/text: face-name f
+    text-f/value: either string? f/text [f/text] [""]
+    required-f/hidden: not find inputs f/style
+    required-f/value: has-rule? f 'required
+]
+
+has-rule?: function [f name [word!]] [
+    if f/rules [foreach r f/rules [if all [block? r  name = first r] [return true]]]
+    false
+]
+
+choose: function [id] [
+    set 'chosen id
+    show-props
+]
+
+; up: the sibling before goes after it; down: it goes after the sibling after it
+move: function [by [integer!]] [
+    f: the-face
+    unless f [exit]
+    r: face-range d f
+    before: after: none
+    foreach g faces-of d [
+        q: face-range d g
+        if all [same? head q/1 head r/1  not same? g f] [
+            if q/3 < r/2 [before: g]
+            if all [q/2 > r/3  not after] [after: g]
+        ]
+    ]
+    either by > 0 [
+        if after [edit move-face d f after  set 'chosen chosen + 1 + count-inside after  refresh]
+    ] [
+        if before [edit move-face d before f  set 'chosen chosen - 1 - count-inside before  refresh]
+    ]
+]
+
+; how many faces of the structure a face holds: the chosen index jumps them
+count-inside: function [f] [
+    n: 0
+    if block? f/pane [foreach g f/pane [if g/written [n: n + 1 + count-inside g]]]
+    n
+]
+
+add-face: function [kind [word!]] [
+    label: select kinds kind
+    code: case [
+        find [row panel] kind [rejoin [kind " []"]]
+        true [rejoin [kind " " mold label]]
+    ]
+    either f: the-face [edit insert-after d f code] [
+        if empty? d/layouts [exit]
+        edit insert-into d d/layouts/1/block code
+    ]
+]
+
+view [
+    width fill
+    row spread [
+        row [
+            title "Trebol designer"
+            global project-name: text muted ""
+        ]
+        row [
+            global file-choice: choice "File" [] on-change [if value [open-file value]]
+            global file-state: text muted ""
+            global save-button: button #check "Save" primary [save-file]
+        ]
+    ]
+    global nothing: text muted hidden "This project has no .trb files yet."
+    grid [1 2 1] [
+        panel "Structure" pad 4 [
+            global structure: tree [name] on-select [choose row/id]
+        ]
+        column [
+            toolbar "Add" [
+                button #heading "Heading" [add-face 'heading]
+                button #type "Text" [add-face 'text]
+                button #edit "Field" [add-face 'field]
+                button #lines "Long text" [add-face 'area]
+                button #hash "Number" [add-face 'number]
+                button #calendar "Date" [add-face 'date]
+                button #dropdown "Choice" [add-face 'choice]
+                button #check-square "Checkbox" [add-face 'check]
+                button #pointer "Button" [add-face 'button]
+                button #columns "Row" [add-face 'row]
+                button #panel "Panel" [add-face 'panel]
+            ]
+            panel "Preview" [
+                global preview: column []
+            ]
+            global problems: table [at "Where" message "Problem"] hidden
+        ]
+        panel "Properties" pad 4 [
+            global nothing-chosen: text muted "Choose a face in the structure to see its properties."
+            global props: column hidden [
+                global face-kind: code ""
+                global text-f: field "Text" [edit set-face-text d the-face value]
+                global required-f: check "Required" on-change [edit toggle-flag d the-face 'required]
+                row [
+                    button #arrow-up "Up" [move -1]
+                    button #arrow-down "Down" [move 1]
+                    button #trash "Delete" [edit remove-face d the-face  set 'chosen none  refresh]
+                ]
+            ]
+        ]
+    ]
+    panel "Code" [
+        global problem-text: text danger hidden ""
+        global code-area: area "Code" [change-text value]
+    ]
+]
+
+read-files
