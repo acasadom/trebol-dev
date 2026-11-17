@@ -5,11 +5,28 @@
   "license": "Apache-2.0",
   "type": "module",
   "homepage": "https://trebol-lang.com/",
-  "keywords": ["trebol", "designer", "devtools"],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/acasadom/trebol-dev.git"
+  },
+  "bugs": {
+    "url": "https://github.com/acasadom/trebol-dev/issues"
+  },
+  "keywords": [
+    "trebol",
+    "designer",
+    "devtools"
+  ],
   "bin": {
     "trebol-dev": "bin/trebol-dev.js"
   },
-  "files": ["bin", "server", "app", "README.md", "LICENSE"],
+  "files": [
+    "bin",
+    "server",
+    "app",
+    "README.md",
+    "LICENSE"
+  ],
   "engines": {
     "node": ">=22.18"
   },
@@ -18,6 +35,6 @@
     "start": "node bin/trebol-dev.js"
   },
   "dependencies": {
-    "trebol": "file:../trebol"
+    "trebol": "^0.3.0"
   }
 }
