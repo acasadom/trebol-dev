@@ -94,7 +94,7 @@ edit: function [t [string! none!]] [if t [change-text t]]
 the-face: does [all [d chosen  pick faces-of d chosen]]
 
 face-name: function [f] [
-    s: form f/style
+    s: form style-word d f
     if l: face-label d f [s: rejoin [l ": " s]]
     if f/name [s: rejoin [s " " f/name]]
     if string? f/text [

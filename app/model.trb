@@ -3,7 +3,7 @@ Trebol [
     exports: [
         design-of spot-of span-of face-range face-span face-code faces-of
         splice replace-value remove-face insert-after insert-into move-face
-        set-face-text set-face-name face-label toggle-flag
+        set-face-text set-face-name face-label style-word toggle-flag
     ]
 ]
 
@@ -284,11 +284,20 @@ text-index: function [
     none
 ]
 
-style-index: function ["The index in its block of a face's style word" d [object!] f [object!]] [
+style-index: function [
+    "The index in its block of the word a face was written with: after global and its label"
+    d [object!] f [object!]
+] [
     r: face-range d f
     n: r/2
-    while [not all [word? pick r/1 n  (pick r/1 n) = f/style]] [n: n + 1]
+    if 'global = pick r/1 n [n: n + 1]
+    if set-word? pick r/1 n [n: n + 1]
     n
+]
+
+style-word: function ["The word a face was written with: submit for a submit button" d [object!] f [object!]] [
+    r: face-range d f
+    pick r/1 style-index d f
 ]
 
 set-face-text: function [

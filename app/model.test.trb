@@ -88,3 +88,8 @@ import %sample.trb
     not none? find t {view [^/    field email "Email"^/    heading "Join us"}]
 [d: design-of {view [^/    text "a"^/    text "b"  ; two^/]}  fs: faces-of d
     {view [^/    text "b"  ; two^/    text "a"^/]} = move-face/before d second fs first fs]
+
+"the word a face was written with"
+[d: design-of {view [form [submit "Go"]]}  f: second faces-of d  all ['button = f/style  'submit = style-word d f]]
+[d: design-of {view [form [submit "Go"]]}  {view [form [submit "Send"]]} = set-face-text d second faces-of d "Send"]
+[d: design-of {view [global x: text "a"]}  'text = style-word d first faces-of d]
