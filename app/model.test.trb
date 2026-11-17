@@ -67,3 +67,9 @@ import %sample.trb
         unless all [find t "; who signs up"  block? try [load t]] [ok: false]
     ]
     ok]
+
+"a comment at the end of a line stays with its face"
+[d: design-of sample  t: insert-after d second faces-of d {text "x"}
+    not none? find t {required  ; theirs^/    text "x"^/    field email}]
+[d: design-of {view [^/    text "a"  ; one^/    text "b"  ; two^/]}  fs: faces-of d
+    {view [^/    text "b"  ; two^/    text "a"  ; one^/]} = move-face d first fs second fs]

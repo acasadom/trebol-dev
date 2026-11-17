@@ -1,0 +1,50 @@
+Trebol [title: "The designer: screen tests"]
+
+disk: #(
+    "app.trb" {Trebol [title: "Signup"]
+
+; who signs up
+view [
+    heading "Join us"
+    field name "Name"  ; theirs
+]
+}
+)
+written: none
+
+serve [
+    GET "/api/files" [#(name: "shop" files: ["app.trb"])]
+    GET "/api/file" [select disk query/path]
+    PUT "/api/file" [written: body  "Saved."]
+]
+
+"opening the project"
+[see "shop"  see {heading "Join us"}  see {field name "Name"}  see "Saved"]
+
+"changing a face"
+[
+    click {field name "Name"}
+    type "Text" "Full name"
+    see {field name "Full name"}
+    see "Changed"
+    click "Required"
+    click "Save"
+    see "Saved"
+    not none? find written {field name "Full name" required  ; theirs}
+]
+[
+    click {heading "Join us"}
+    click "Delete"
+    see/not {heading "Join us"}
+    click "Save"
+    not none? find written {view [^/    field name}
+]
+
+"adding a face"
+[
+    click {field name "Name"}
+    click "Checkbox"
+    see {check "Checkbox"}
+    click "Save"
+    not none? find written {field name "Name"  ; theirs^/    check "Checkbox"^/]}
+]

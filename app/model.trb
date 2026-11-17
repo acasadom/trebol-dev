@@ -177,6 +177,15 @@ blank?: function ["Whether text holds only spaces and tabs" s [string!]] [
     parse s [any [#" " | #"^-"]]
 ]
 
+after-line: function [
+    "Where to put a new line after a value that ends at an index: the end of its line when only spaces or a comment follow it"
+    text [string!] n [integer!]
+] [
+    rest: find at text n newline
+    tail-text: copy/part at text n either rest [(index? rest) - n] [length? at text n]
+    either any [blank? tail-text  #";" = first trim/head copy tail-text] [n + length? tail-text] [n]
+]
+
 replace-value: function [
     "The text with the value at an index of a loaded block written anew"
     d [object!] b [block! paren!] n [integer!] new [any-type!]
@@ -216,8 +225,7 @@ insert-after: function [
     d [object!] f [object!] code [string!]
 ] [
     s: face-span d f
-    at-index: s/x + s/y
-    splice d/text at-index 0 rejoin [newline indent-at d/text s/x code]
+    splice d/text after-line d/text s/x + s/y 0 rejoin [newline indent-at d/text s/x code]
 ]
 
 insert-into: function [
@@ -230,24 +238,25 @@ insert-into: function [
     close: owner/x + owner/y - 1   ; the ]
     if empty? b [return splice d/text close 0 code]
     last-span: span-of d b length? b
-    splice d/text last-span/x + last-span/y 0 rejoin [newline indent-at d/text last-span/x code]
+    splice d/text after-line d/text last-span/x + last-span/y 0 rejoin [newline indent-at d/text last-span/x code]
 ]
 
 move-face: function [
     "The text with a face moved after another face"
     d [object!] f [object!] target [object!]
 ] [
-    code: face-code d f
     s: face-span d f
+    ; a comment after the face on its line goes with it
+    code: copy/part at d/text s/x (after-line d/text s/x + s/y) - s/x
     t: face-span d target
     if s = t [return d/text]
     either t/x > s/x [
         ; the later place first, so the earlier one stays where it was
-        text: splice d/text t/x + t/y 0 rejoin [newline indent-at d/text t/x code]
+        text: splice d/text after-line d/text t/x + t/y 0 rejoin [newline indent-at d/text t/x code]
         cut text s
     ] [
         text: cut d/text s
-        splice text t/x + t/y 0 rejoin [newline indent-at d/text t/x code]
+        splice text after-line text t/x + t/y 0 rejoin [newline indent-at d/text t/x code]
     ]
 ]
 
