@@ -127,7 +127,7 @@ face-parts: function [
         append out p
     ]
     ; a view has no word of its own: its words start its block
-    unless layout-of d f [
+    unless own-block d f [
         if 'global = pick b i [add-part 'global i i  i: i + 1]
         if set-word? pick b i [add-part 'label i i  i: i + 1]
         add-part 'style i i  i: i + 1
@@ -313,7 +313,7 @@ set-option: function [
             splice d/text s/x + s/y 0 rejoin [" " code]
         ]
     ] [
-        either all [layout-of d f  r/3 < r/2] [view-words-at d r/1 code] [
+        either all [own-block d f  r/3 < r/2] [view-words-at d r/1 code] [
             splice d/text insert-option-at d f 0 rejoin [" " code]
         ]
     ]

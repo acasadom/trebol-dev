@@ -101,3 +101,31 @@ import %sample.trb
 [d: design-of {view [global who: text "a"]}  {view [text "a"]} = set-face-label d first faces-of d none]
 [d: design-of {view [who: text "a"]}  {view [global who: text "a"]} = set-face-global d first faces-of d true]
 [d: design-of {view [global who: text "a"]}  {view [who: text "a"]} = set-face-global d first faces-of d false]
+"screens: each a face of the structure, its faces under it"
+[
+    d: design-of {view [screens [home "Home" [text "a"] about "About" [id] [on-enter [x] heading "b"]]]}
+    [screens screen text screen heading] = collect [foreach f faces-of d [keep f/style]]
+]
+[
+    d: design-of {view [screens [home "Home" [text "a"]]]}
+    s: second faces-of d
+    all [[1 0] = next face-range d s  {home "Home" [text "a"]} = face-code d s  'screen = style-word d s]
+]
+[
+    d: design-of {view [screens [home "Home" [text "a"]]]}
+    s: second faces-of d
+    all [
+        {view [screens [start "Home" [text "a"]]]} = set-screen d s 'name 'start
+        {view [screens [home "Start" [text "a"]]]} = set-screen d s 'title "Start"
+        {view [screens [home "Home" [id] [text "a"]]]} = set-screen d s 'args [id]
+    ]
+]
+[
+    d: design-of {view [screens [home "Home" [id] [text "a"]]]}
+    {view [screens [home "Home" [text "a"]]]} = set-screen d second faces-of d 'args none
+]
+[
+    d: design-of {view [^/    screens [^/        home "Home" [text "a"]^/    ]^/]}
+    {view [^/    screens [^/        home "Home" [text "a"]^/        screen-1 "Screen 1" []^/    ]^/]} = add-screen d first faces-of d
+]
+[d: design-of {view [screens [home "Home" [text "a"] b "B" []]]}  {view [screens [b "B" []]]} = remove-face d second faces-of d]

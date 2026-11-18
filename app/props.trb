@@ -149,7 +149,7 @@ props-code: function [
     parts: face-parts d f
     r: face-range d f
     ; a view's words come before its faces: neither blocks, texts nor what it follows are among them
-    view?: to logic! layout-of d f
+    view?: to logic! own-block d f
     entries: copy []
     written: copy []
     groups: copy []
@@ -195,6 +195,20 @@ props-code: function [
         if q/what = 'text [t: pick r/1 q/from]
         if q/what = 'hint [h: pick r/1 q/from]
     ]
+    ; a screen: its name, title and arguments, written before its block
+    if all [f/style = 'screen  r2: written-range d f] [
+        b: r2/1  i: r2/2
+        args: either r2/3 = (i + 3) [form pick b i + 2] [""]
+        append code compose/deep [
+            divider text small muted "Screen" column gap 2 [
+                field "screen name" "word" with [value: (form pick b i)] on-change [(act) 0 'screen-name value]
+                field "title" "what the window is called" with [value: (form pick b i + 1)] on-change [(act) 0 'screen-title value]
+                field "arguments" "words, as id: client/42 gives id 42" with [value: (args)] on-change [(act) 0 'screen-args value]
+                button #plus "Add a screen" small [(act) 0 'add-screen none]
+            ]
+        ]
+    ]
+    if f/style = 'screens [append code compose/deep [button #plus "Add a screen" small [(act) 0 'add-screen none]]]
     ; the word code names it with: who: field, global for every script
     if all [not view?  any [empty? query  find "label global word" query]] [
         l: face-label d f
@@ -250,7 +264,7 @@ events-code: function [
     evs: union intersect evs extract have 2 evs
     code: copy []
     ; what it does when clicked: the block after it; a view's words have none
-    if all [not layout-of d f  any [empty? query  find "action click" query]] [
+    if all [not own-block d f  any [empty? query  find "action click" query]] [
         a: none
         foreach q parts [if q/what = 'action [a: pick r/1 q/from]]
         append code compose/deep [

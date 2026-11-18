@@ -100,6 +100,8 @@ edit: function [t [string! none!]] [if t [change-text t]]
 the-face: does [all [d chosen  pick shown-faces d chosen]]
 
 face-name: function [f] [
+    ; a screen: its name and title, home "Home"
+    if all [f/style = 'screen  r: written-range d f] [return rejoin ["screen " pick r/1 r/2 " " mold f/text]]
     s: form style-word d f
     if l: face-label d f [s: rejoin [l ": " s]]
     ; a grid says how it splits: grid 3, grid [1 2 1]
@@ -120,13 +122,13 @@ nodes-of: function [fs [block!] all-faces [block!]] [
         foreach f fs [
             either n: find/same all-faces f [
                 node: make map! reduce ['id index? n 'name face-name f]
-                if block? f/pane [
-                    node/children: nodes-of f/pane all-faces
+                if kids: pane-of d f [
+                    node/children: nodes-of kids all-faces
                     node/expanded: true
                 ]
                 keep node
             ] [
-                if block? f/pane [keep nodes-of f/pane all-faces]
+                if kids: pane-of d f [keep nodes-of kids all-faces]
             ]
         ]
     ]
@@ -156,6 +158,7 @@ redraw: function [] [
     structure/data: collect [foreach l d/layouts [if l/view [keep nodes-of reduce [l/view] fs]]]
     if all [chosen  chosen > length? fs] [set 'chosen none]
     structure/selected: node-of chosen structure/data
+    show-screens
     preview/pane: collect [foreach l d/layouts [if l/view [keep l/view/pane]]]
     fill-samples preview/pane
     mark-chosen
@@ -177,6 +180,8 @@ show-props: function [] [
     face-kind/text: face-name f
     ; a view holds the rest: it is neither moved nor deleted
     face-moves/hidden: to logic! layout-of d f
+    ; a screen is deleted, never moved: the first is the one an app starts on
+    move-up/hidden: move-down/hidden: f/style = 'screen
     def: style-def-of d f
     chain: copy []
     while [def] [append chain form def/name  def: def/parent]
@@ -204,7 +209,7 @@ prop-act: function [k [integer!] what [word!] value] [
     unless f: the-face [exit]
     e: all [g  first g]
     ; typing goes on in the control: the panel is laid out again only for a choice or a removal
-    if find [values code text hint is calc react event action label] what [set 'keep-props true]
+    if find [values code text hint is calc react event action label screen-name screen-title screen-args] what [set 'keep-props true]
     ; a picked icon shows in the panel: laid out again
     t: switch what [
         flag [either value [set-option d f e none] [remove-option d f e]]
@@ -245,6 +250,13 @@ prop-act: function [k [integer!] what [word!] value] [
             ]
         ]
         global [set-face-global d f value]
+        screen-name [w: attempt [load value]  either word? w [set-screen d f 'name w] [none]]
+        screen-title [set-screen d f 'title value]
+        screen-args [
+            w: attempt [load/all value]
+            either all [block? w  parse w [any word!]] [set-screen d f 'args w] [none]
+        ]
+        add-screen [add-screen d f]
         action [
             b: all [string? value  not empty? trim copy value  attempt [load value]]
             set-action d f either all [block? b  not empty? b] [b] [none]
@@ -314,14 +326,25 @@ prop-values: function [f g [block!] value [string!]] [
 
 ; the loaded block that holds a box's faces
 pane-block: function [f] [
-    if l: layout-of d f [return l/block]
+    if b: own-block d f [return b]
     unless all [find boxes f/style  r: face-range d f] [return none]
     b: pick r/1 r/3
     either block? b [b] [none]
 ]
 
+; a screens face shows one screen: the one the chosen face is on, or its first
+show-screens: function [] [
+    c: the-face
+    foreach [f them] d/screens [
+        on: first them
+        foreach s them [if all [c  any [same? s c  inside? d c s]] [on: s]]
+        unless all [block? f/pane  same? on first f/pane] [f/pane: either on [reduce [on]] [copy []]]
+    ]
+]
+
 choose-face: function [id] [
     set 'chosen id
+    show-screens
     structure/selected: node-of chosen structure/data
     mark-chosen
     show-props
@@ -369,7 +392,7 @@ foreach w ui-dialect-words [put code-words w either select styles w ['style] ['f
 step-face: function [by [integer!]] [
     f: the-face
     ; a view stays where it is: it holds the rest
-    unless all [f  not layout-of d f] [exit]
+    unless all [f  not own-block d f] [exit]
     r: face-range d f
     before: after: none
     foreach g shown-faces d [
@@ -395,7 +418,7 @@ reorder: function [parent from [integer!] to [integer!]] [
     b: pick list either to > from [to - 1] [to + 1]
     f: pick fs a/id
     g: pick fs b/id
-    if any [layout-of d f  layout-of d g] [redraw  exit]
+    if any [own-block d f  own-block d g] [redraw  exit]
     either to > from [
         edit move-face d f g
         set 'chosen b/id + (count-inside g) - count-inside f
@@ -409,7 +432,7 @@ reorder: function [parent from [integer!] to [integer!]] [
 ; how many faces of the structure a face holds: the chosen index jumps them
 count-inside: function [f] [
     n: 0
-    if block? f/pane [foreach g f/pane [if g/written [n: n + 1 + count-inside g]]]
+    foreach g any [pane-of d f []] [if g/written [n: n + 1 + count-inside g]]
     n
 ]
 
@@ -471,8 +494,8 @@ view compose/deep/only [
                 global props-find: field "Find an option" on-change [set 'props-query any [value ""]  fill-props]
                 global props-list: column []
                 global face-moves: row [
-                    button #arrow-up "Up" [step-face -1]
-                    button #arrow-down "Down" [step-face 1]
+                    global move-up: button #arrow-up "Up" [step-face -1]
+                    global move-down: button #arrow-down "Down" [step-face 1]
                     button #trash "Delete" danger [edit remove-face d the-face  set 'chosen none  redraw]
                 ]
             ]

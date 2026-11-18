@@ -5,6 +5,7 @@ Trebol [
         splice cut replace-value remove-face insert-after insert-into move-face
         set-face-text set-face-name face-label style-word toggle-flag
         layout-of head-end block-span indent-at shown-faces
+        pane-of own-block written-range values-at inside? set-screen screens-data add-screen
         set-face-label set-face-global
     ]
 ]
@@ -47,6 +48,7 @@ design-of: function [
         layouts: none   ; block of objects: kind block view problems
         defs: none      ; style -> style-def of the styles the file redefines
         own: none       ; the styles the file defines or redefines, that a layout writes
+        screens: none   ; [screens-face its-screens ...]: all of them, whichever the preview shows
     ]
     d/text: text
     d/values: values
@@ -88,6 +90,13 @@ design-of: function [
     run-own values 'rule
     run-own values 'stylize
     find-layouts values
+    ; every screen of a screens face: the preview shows one of them, the structure all
+    d/screens: copy []
+    keep-screens: function [fs] [foreach f fs [
+        if f/style = 'screens [append d/screens reduce [f copy any [f/pane []]]]
+        if block? f/pane [keep-screens f/pane]
+    ]]
+    foreach l d/layouts [if l/view [keep-screens l/view/pane]]
     ; what the file defines anew stays known; a style it redefines is its own, kept in the design,
     ; and the one before comes back, so the designer's own screen never changes (rule cannot
     ; redefine one of Trebol's)
@@ -160,12 +169,35 @@ head-end: function [
     n - 1
 ]
 
+written-range: function [
+    "Where a face was written: [block first last], indexes in the loaded block; none if made at run time"
+    d [object!] f [object!]
+] [
+    unless f/written [return none]
+    a: spot-of d f/written/1
+    z: spot-of d f/written/2
+    unless all [a z  same? a/2 z/2] [return none]
+    reduce [a/2 a/3 z/3]
+]
+
+own-block: function [
+    "The block whose first words are a face's own: a view's, or a screen's (home ^"Home^" [...]); none for others"
+    d [object!] f [object!]
+] [
+    if l: layout-of d f [return l/block]
+    if all [f/style = 'screen  r: written-range d f] [
+        b: pick r/1 r/3
+        if block? b [return b]
+    ]
+    none
+]
+
 face-range: function [
     "The values a face was written with: [block first last], indexes in the loaded block; none if made at run time"
     d [object!] f [object!]
 ] [
-    ; a view: the words before its first face
-    if l: layout-of d f [return reduce [l/block 1 head-end l/block]]
+    ; a view or a screen: the words before its first face
+    if b: own-block d f [return reduce [b 1 head-end b]]
     unless f/written [return none]
     a: spot-of d f/written/1
     z: spot-of d f/written/2
@@ -178,9 +210,16 @@ face-span: function [
     d [object!] f [object!]
 ] [
     if l: layout-of d f [return block-span d l/block]
+    if all [f/style = 'screen  r: written-range d f] [return values-at d r/1 r/2 r/3]
     unless r: face-range d f [return none]
     a: span-of d r/1 r/2
     z: span-of d r/1 r/3
+    as-pair a/x z/x + z/y - a/x
+]
+
+values-at: function ["Where the values from one index to another of a loaded block sit" d [object!] b [block!] from [integer!] to [integer!]] [
+    a: span-of d b from
+    z: span-of d b to
     as-pair a/x z/x + z/y - a/x
 ]
 
@@ -194,6 +233,10 @@ face-code: function ["The text a face was written with" d [object!] f [object!]]
     copy/part at d/text s/x s/y
 ]
 
+pane-of: function ["The faces a face holds: every screen of a screens face" d [object!] f [object!]] [
+    any [select/same d/screens f  all [block? f/pane  f/pane]]
+]
+
 faces-of: function [
     "Every face of the design's layouts that was written in the text, in order, nested ones after their parent"
     d [object!]
@@ -202,7 +245,7 @@ faces-of: function [
     walk: function [fs] [
         foreach f fs [
             if face-range d f [append out f]
-            if block? f/pane [walk f/pane]
+            if fs: pane-of d f [walk fs]
         ]
     ]
     foreach l d/layouts [if l/view [walk l/view/pane]]
@@ -217,13 +260,13 @@ shown-faces: function [
     fs: faces-of d
     foreach l d/layouts [if l/view [
         append out l/view
-        foreach f fs [if inside? f l/view [append out f]]
+        foreach f fs [if inside? d f l/view [append out f]]
     ]]
     out
 ]
 
-inside?: function [f [object!] v [object!]] [
-    if block? v/pane [foreach g v/pane [if any [same? g f  inside? f g] [return true]]]
+inside?: function [d [object!] f [object!] v [object!]] [
+    foreach g any [pane-of d v []] [if any [same? g f  inside? d f g] [return true]]
     false
 ]
 
@@ -288,8 +331,12 @@ cut: function [
         if all [not rest  from > 1] [from: from - 1]
         return splice text from stop - from ""
     ]
-    ; otherwise the spaces before it go too
-    while [all [from > 1  find " ^-" pick text from - 1]] [from: from - 1]
+    ; otherwise the spaces before it go too, or after it when it opens its block: [a b] -> [b]
+    either all [from > 1  find " ^-" pick text from - 1] [
+        while [all [from > 1  find " ^-" pick text from - 1]] [from: from - 1]
+    ] [
+        while [all [stop <= length? text  find " ^-" pick text stop]] [stop: stop + 1]
+    ]
     splice text from stop - from ""
 ]
 
@@ -386,6 +433,7 @@ style-index: function [
 
 style-word: function ["The word a face was written with: submit for a submit button" d [object!] f [object!]] [
     if layout-of d f [return 'view]
+    if own-block d f [return f/style]
     r: face-range d f
     pick r/1 style-index d f
 ]
@@ -418,7 +466,7 @@ toggle-flag: function [
 ]
 
 face-label: function ["The word a face is set to, sign-up: panel, or none" d [object!] f [object!]] [
-    if layout-of d f [return none]
+    if own-block d f [return none]
     r: face-range d f
     v: pick r/1 r/2
     if all [word? :v  'global = v] [v: pick r/1 r/2 + 1]
@@ -461,6 +509,45 @@ set-face-global: function [
         ]
         true [d/text]
     ]
+]
+
+set-screen: function [
+    "The text with a screen's name, title or arguments (none takes them out) changed: home ^"Home^" [id] [...]"
+    d [object!] f [object!] what [word!] new
+] [
+    r: written-range d f
+    b: r/1  i: r/2
+    args?: r/3 = (i + 3)
+    switch what [
+        name [replace-value d b i new]
+        title [replace-value d b i + 1 new]
+        args [
+            case [
+                all [args?  any [none? new  empty? new]] [
+                    s: span-of d b i + 2
+                    if #" " = pick d/text s/x + s/y [s/y: s/y + 1]
+                    splice d/text s/x s/y ""
+                ]
+                args? [replace-value d b i + 2 new]
+                all [new  not empty? new] [s: span-of d b r/3  splice d/text s/x 0 rejoin [mold new " "]]
+                true [d/text]
+            ]
+        ]
+    ]
+]
+
+screens-data: function ["The block of a screens face's screens, or of the screens a screen is among" d [object!] f [object!]] [
+    if f/style = 'screen [return first written-range d f]
+    r: face-range d f
+    foreach v copy/part at r/1 r/2 r/3 - r/2 + 1 [if block? v [return v]]
+    none
+]
+
+add-screen: function ["The text with a new, empty screen last among those of a screens face or screen" d [object!] f [object!]] [
+    unless b: screens-data d f [return none]
+    n: 1
+    while [find b to word! rejoin ["screen-" n]] [n: n + 1]
+    insert-into d b rejoin ["screen-" n " " mold rejoin ["Screen " n] " []"]
 ]
 
 set-face-name: function [

@@ -9,6 +9,19 @@ view [
     field name "Name"  ; theirs
 ]
 }
+    "pages.trb" {Trebol [title: "Pages"]
+
+view [
+    screens [
+        home "Home" [
+            heading "Welcome"
+        ]
+        about "About" [
+            text "Who we are"
+        ]
+    ]
+]
+}
     "notes.trb" {Trebol [title: "Notes"]
 
 stylize [note: text [role: 'muted]]
@@ -20,7 +33,7 @@ view [
 written: none
 
 serve [
-    GET "/api/files" [#(name: "shop" files: ["app.trb" "notes.trb"])]
+    GET "/api/files" [#(name: "shop" files: ["app.trb" "notes.trb" "pages.trb"])]
     GET "/api/file" [select disk query/path]
     PUT "/api/file" [written: body  "Saved."]
 ]
@@ -116,4 +129,19 @@ serve [
     pick-menu "Add" ["This file" "note"]
     click "Save"
     not none? find written {heading "Notes"^/    note^/]}
+]
+
+"screens"
+[
+    choose "File" "pages.trb"
+    see {screen home "Home"}
+    see {screen about "About"}
+    click {text "Who we are"}
+    see "Who we are"
+    click {screen about "About"}
+    type "title" "About us"
+    see {screen about "About us"}
+    click "Add a screen"
+    click "Save"
+    not none? find written {about "About us" [^/            text "Who we are"^/        ]^/        screen-1 "Screen 1" []}
 ]
