@@ -91,6 +91,13 @@ change-text: function [t [string!]] [
         set 'd e
         ; the Add menu has the styles the file defines too
         add-button/menu: get in first layout/only compose/only [button menu (palette-menu/own d/own)] 'menu
+        ; and the code colours them as styles: only when they change, as that lays the editor out anew
+        unless own-words = d/own [
+            set 'own-words copy d/own
+            w: copy code-words
+            foreach s d/own [put w s 'style]
+            code-view/props: make code-view/props [words: w]
+        ]
     ]
     redraw
 ]
@@ -408,6 +415,7 @@ show-mode: function [m] [
 
 ; the code view colours the dialect's words: styles, and the words that change them
 code-words: make map! []
+own-words: []
 foreach w ui-dialect-words [put code-words w either select styles w ['style] ['flag]]
 
 ; up: the sibling before goes after it; down: it goes after the sibling after it

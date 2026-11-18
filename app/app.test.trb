@@ -184,3 +184,9 @@ serve [
     click {tab "Two"}
     props-find/hidden
 ]
+
+"the code colours the file's own styles"
+[
+    choose "File" "notes.trb"
+    all ['style = select code-view/props/words 'note  'style = select code-view/props/words 'heading]
+]
