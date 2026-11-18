@@ -24,6 +24,14 @@ palette: [
         column "Column" {column []}
         panel "Panel" {panel "Panel" []}
         form "Form" {form []}
+        screens "Screens of the app" {screens [
+    home "Home" [
+        text "Home"
+    ]
+    details "Details" [
+        text "Details"
+    ]
+]}
         tabs "Tabs" {tabs [
     "One" []
     "Two" []

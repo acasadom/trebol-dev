@@ -19,8 +19,8 @@ import %model.trb
     have: copy []
     foreach [group items] palette [foreach [w label code] items [append have first to block! code]]
     missing: exclude words-of styles have
-    ; screens and screen are the app's own screens, tab and step are made by tabs and steps, entry by rows, backdrop goes behind a box, widget needs a page's JavaScript, orbit a graph of data
-    empty? exclude missing [screens screen tab step entry backdrop widget orbit view]
+    ; screen is made by screens, tab and step are made by tabs and steps, entry by rows, backdrop goes behind a box, widget needs a page's JavaScript, orbit a graph of data
+    empty? exclude missing [screen tab step entry backdrop widget orbit view]
 ]
 "the styles a file defines are in the Add menu"
 [
