@@ -183,6 +183,8 @@ show-props: function [] [
     face-moves/hidden: to logic! layout-of d f
     ; a screen is deleted, never moved: the first is the one an app starts on
     move-up/hidden: move-down/hidden: to logic! find [screen tab step] f/style
+    ; a tab or a step has a label only: no options to find, no events
+    props-tab/hidden: props-find/hidden: to logic! piece? f
     def: style-def-of d f
     chain: copy []
     while [def] [append chain form def/name  def: def/parent]
@@ -193,7 +195,7 @@ show-props: function [] [
 ; the controls of the chosen face's options or handlers, laid out anew from what its style takes
 fill-props: function [] [
     unless f: the-face [exit]
-    either props-tab/value = "Events" [
+    either all [props-tab/value = "Events"  not piece? f] [
         props-list/pane: layout/only events-code d f props-query 'prop-act
     ] [
         p: props-code d f props-query 'prop-act
@@ -342,13 +344,23 @@ pane-block: function [f] [
     either block? b [b] [none]
 ]
 
-; a screens face shows one screen: the one the chosen face is on, or its first
+; a screens face shows one screen: the one the chosen face is on, or its first; tabs and steps
+; show the tab or step the chosen face is on
 show-screens: function [] [
     c: the-face
     foreach [f them] d/screens [
         on: first them
         foreach s them [if all [c  any [same? s c  inside? d c s]] [on: s]]
-        unless all [block? f/pane  same? on first f/pane] [f/pane: either on [reduce [on]] [copy []]]
+        unless all [block? f/pane  1 = length? f/pane  same? on first f/pane] [f/pane: either on [reduce [on]] [copy []]]
+    ]
+    unless c [exit]
+    foreach f faces-of d [
+        if all [find [tabs steps] f/style  block? f/pane] [
+            repeat i length? f/pane [
+                p: pick f/pane i
+                if all [any [same? p c  inside? d c p]  f/value <> i] [f/value: i]
+            ]
+        ]
     ]
 ]
 

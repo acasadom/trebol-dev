@@ -25,6 +25,13 @@ view [
     ]
 ]
 }
+    "tabs.trb" {Trebol [title: "Tabs"]
+
+view [
+    tabs ["One" [text "first"] "Two" [text "second"]]
+    steps ["Start" [text "begin"] "End" [text "finish"]]
+]
+}
     "notes.trb" {Trebol [title: "Notes"]
 
 stylize [note: text [role: 'muted]]
@@ -36,7 +43,7 @@ view [
 written: none
 
 serve [
-    GET "/api/files" [#(name: "shop" files: ["app.trb" "notes.trb" "pages.trb"])]
+    GET "/api/files" [#(name: "shop" files: ["app.trb" "notes.trb" "pages.trb" "tabs.trb"])]
     GET "/api/file" [select disk query/path]
     PUT "/api/file" [written: body  "Saved."]
 ]
@@ -137,6 +144,13 @@ serve [
 "screens"
 [
     choose "File" "pages.trb"
+    one: does [all [1 = length? preview/pane/1/pane  preview/pane/1/pane/1/text]]
+    first-one: one
+    click {text "Who we are"}
+    all ["Home" = first-one  "About" = one]
+]
+[
+    choose "File" "pages.trb"
     see {screen home "Home"}
     see {screen about "About"}
     click {text "Who we are"}
@@ -155,4 +169,18 @@ serve [
     pick-menu "Add" ["Choice" "Checkbox"]
     click "Save"
     not none? find written {field name "Name"^/                check "Checkbox"^/            ]}
+]
+
+"tabs and steps"
+[
+    choose "File" "tabs.trb"
+    click {tab "Two"}
+    two: preview/pane/1/value
+    click {text "finish"}
+    all [2 = two  2 = preview/pane/2/value  props-find/hidden = false]
+]
+[
+    choose "File" "tabs.trb"
+    click {tab "Two"}
+    props-find/hidden
 ]
