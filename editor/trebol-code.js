@@ -3,6 +3,8 @@
 //   mark   [index length] of the text to mark (the chosen face), in code points from 1, or none
 //   words  {style-word: kind}: words coloured as the dialect's (kind = "style" or "flag")
 // Events: `caret` with detail = the code point index (from 1) where the person put the cursor.
+// <trebol-code-small>: the same for a block of a property: no line numbers, as tall as its lines (up to 10),
+// and `change` only once the person leaves it, so what they type is read when they are done.
 // Built into app/trebol-code.js by `npm run build:editor`.
 import { EditorView, keymap, lineNumbers, highlightActiveLine, drawSelection, Decoration } from '@codemirror/view';
 import { EditorState, StateEffect, StateField, Annotation } from '@codemirror/state';
@@ -96,6 +98,16 @@ const highlight = HighlightStyle.define([
   { tag: [t.bracket, t.operator], color: 'var(--tb-muted, #78716c)' },
 ]);
 
+const smallTheme = EditorView.theme({
+  '&': { minHeight: '30px', maxHeight: '180px', border: '1px solid var(--tb-border, #d6d3d1)', borderRadius: '6px', background: 'var(--tb-surface, #fff)', color: 'var(--tb-text, #1c1c1c)', fontSize: '12px' },
+  '&.cm-focused': { outline: '2px solid var(--tb-primary, #2563eb)', outlineOffset: '-1px' },
+  '.cm-scroller': { fontFamily: 'ui-monospace, "JetBrains Mono", Menlo, Consolas, monospace', lineHeight: '1.5', overflow: 'auto' },
+  '.cm-content': { caretColor: 'var(--tb-text, #000)', padding: '4px 0' },
+  '.cm-line': { padding: '0 8px' },
+  '.cm-activeLine': { background: 'transparent' },
+  '.cm-selectionBackground, &.cm-focused .cm-selectionBackground, ::selection': { background: 'color-mix(in oklch, var(--tb-primary, #2563eb) 22%, transparent) !important' },
+});
+
 const theme = EditorView.theme({
   '&': { height: '100%', minHeight: '240px', background: 'var(--tb-surface, #fff)', color: 'var(--tb-text, #1c1c1c)', fontSize: '13px' },
   '&.cm-focused': { outline: 'none' },
@@ -149,11 +161,19 @@ function indexOf(text, offset) {
 }
 
 class TrebolCode extends HTMLElement {
+  static small = false;
   #view = null;
   #text = '';
   #mark = null;
   #words = {};
   #changed = 0;
+  #dirty = false;
+
+  #left() {
+    if (!this.#dirty) return;
+    this.#dirty = false;
+    this.dispatchEvent(new Event('change'));
+  }
 
   connectedCallback() {
     if (this.#view) return;
@@ -170,12 +190,15 @@ class TrebolCode extends HTMLElement {
     return EditorState.create({
       doc,
       extensions: [
-        lineNumbers(), history(), drawSelection(), highlightActiveLine(), bracketMatching(), highlightSelectionMatches(),
+        ...(this.constructor.small ? [] : [lineNumbers()]),
+        history(), drawSelection(), highlightActiveLine(), bracketMatching(), highlightSelectionMatches(),
         indentUnit.of('    '), EditorState.tabSize.of(4),
-        StreamLanguage.define(trebolMode(this.#words)), syntaxHighlighting(highlight), theme, markField,
+        StreamLanguage.define(trebolMode(this.#words)), syntaxHighlighting(highlight),
+        this.constructor.small ? smallTheme : theme, markField,
         keymap.of([indentWithTab, ...defaultKeymap, ...historyKeymap, ...searchKeymap]),
         EditorView.contentAttributes.of({ 'aria-label': this.getAttribute('aria-label') ?? 'Code' }),
         EditorView.updateListener.of(u => this.#update(u)),
+        EditorView.domEventHandlers({ blur: () => this.#left() }),
       ],
     });
   }
@@ -184,6 +207,7 @@ class TrebolCode extends HTMLElement {
     const mine = u.transactions.some(tr => tr.annotation(fromTrebol));
     if (u.docChanged && !mine) {
       this.#text = u.state.doc.toString();
+      if (this.constructor.small) { this.#dirty = true; return; }
       // the design is read again from the text: not on every key
       clearTimeout(this.#changed);
       this.#changed = setTimeout(() => this.dispatchEvent(new Event('change')), 250);
@@ -248,3 +272,4 @@ class TrebolCode extends HTMLElement {
 }
 
 customElements.define('trebol-code', TrebolCode);
+customElements.define('trebol-code-small', class extends TrebolCode { static small = true; });

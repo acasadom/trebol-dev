@@ -1,7 +1,7 @@
 Trebol [
     title: "What each value a face was written with is, read from what its style takes, and the edits of its options"
     exports: [
-        style-def-of face-parts option-rows option-of row-values custom-rule-words
+        style-def-of face-parts option-rows option-of group-part row-values custom-rule-words
         set-option remove-option set-event remove-event set-reaction set-hint
         insert-option-at values-span
     ]
@@ -99,6 +99,18 @@ take-at: function [e b [block!] i [integer!] last-i [integer!] customs] [
 
 one-of-value?: func [e] [all [e/how = 'value  block? first e/args  'one-of = first first e/args]]
 
+; Whether entry x, a block's, took a block of face f: its function may say no, as grid's weights
+; do to the faces' block, so the face as layout read it says: the field changed, and no value of
+; another entry had filled it.
+block-took?: function [def f x parts] [
+    unless x/fn [return true]
+    unless set-word? x/field [return true]
+    w: to word! x/field
+    foreach p parts [if all [p/e  p/e/field = x/field] [return false]]
+    v: select f w
+    not any [none? :v  same? :v select def/proto w]
+]
+
 face-parts: function [
     "The parts of what a face was written with, in order: what each is and where it sits in its loaded block"
     d [object!] f [object!]
@@ -155,7 +167,7 @@ face-parts: function [
                 n: 0
                 foreach x def/entries [
                     n: n + 1
-                    if all [not e  x/how = 'block  not find blocks n] [e: x  append blocks n]
+                    if all [not e  x/how = 'block  not find blocks n  block-took? def f x out] [e: x  append blocks n]
                 ]
                 either e [add-part/with 'block i i e none] [add-part 'action i i]
                 q: i
@@ -171,22 +183,36 @@ face-parts: function [
 ; --- the options a face's style takes, as the designer shows them --------------------------
 
 option-rows: function [
-    "Each option a face's style takes, its own first, then those of the style it is made from: [style entries ...]; entries of one field and kind are one"
+    "Each option a face's style takes, its own first, then those of the style it is made from: [style [group ...] ...]"
     def [object!]
 ] [
+    ; a group is the entries that are one option: those that fill one field with a value or a
+    ; block, as grid 3 and grid [1 2 1] do, or kind right after chart and later
     out: copy []
     seen: copy []
     s: def
     while [s] [
-        es: copy []
+        gs: copy []
         foreach e s/own [
-            key: reduce [e/field e/how e/kw mold e/args]
-            unless find/only seen key [append/only seen key  append es e]
+            key: either find [value block] e/how [reduce [e/field 'bare]] [reduce [e/field e/how e/kw mold e/args]]
+            either g: select/only seen key [
+                unless find collect [foreach x g [keep mold x/args]] mold e/args [append g e]
+            ] [
+                g: reduce [e]
+                append/only seen key
+                append/only seen g
+                append/only gs g
+            ]
         ]
-        unless empty? es [append out reduce [s/name es]]
+        unless empty? gs [append out reduce [s/name gs]]
         s: s/parent
     ]
     out
+]
+
+group-part: function ["The part a face has of an option, a group of entries: [part entry], or none" parts [block!] es [block!]] [
+    foreach e es [if p: option-of parts e [return reduce [p e]]]
+    none
 ]
 
 same-entry?: func [a b] [
@@ -233,12 +259,16 @@ molded: function [vals [block!]] [mold/only vals]
 
 set-option: function [
     "The text with an option of a face set to values (none for a flag): written anew where it is, or added"
-    d [object!] f [object!] e [object!] vals [block! none!] /rule w
+    d [object!] f [object!] e [object!] vals [block! none!] /rule w /over q [object!] "In place of the part of another entry of the option"
 ] [
     parts: face-parts d f
     p: either rule [option-of/rule parts e w] [option-of parts e]
     r: face-range d f
     vals: any [vals copy []]
+    if all [over  not p] [
+        s: values-span d r/1 q/from q/to
+        return splice d/text s/x s/y either e/kw [rejoin [e/kw " " molded vals]] [molded vals]
+    ]
     if p [
         if find [flag custom] e/how [return d/text]
         from: either all [e/kw  find [keyword rule] e/how] [p/from + 1] [p/from]
@@ -251,10 +281,31 @@ set-option: function [
         e/kw [either empty? vals [form e/kw] [rejoin [e/kw " " molded vals]]]
         true [molded vals]
     ]
+    if e/lead [
+        ; right after the style, after the ones before it
+        n: none
+        foreach q parts [if any [q/what = 'style  all [q/e  q/e/lead]] [n: q/to]]
+        s: span-of d r/1 n
+        return splice d/text s/x + s/y 0 rejoin [" " code]
+    ]
     either e/how = 'block [
-        ; a block goes where blocks are, after every other value
-        s: face-span d f
-        splice d/text s/x + s/y 0 rejoin [" " code]
+        ; blocks are taken in turn: it goes before the first that comes after it, and the action
+        def: style-def-of d f
+        mine: index? find/same def/entries e
+        before: none
+        foreach q parts [
+            if all [not before  any [
+                q/what = 'action
+                all [q/what = 'block  mine < index? find/same def/entries q/e]
+            ]] [before: q]
+        ]
+        either before [
+            s: span-of d r/1 before/from
+            splice d/text s/x 0 rejoin [code " "]
+        ] [
+            s: face-span d f
+            splice d/text s/x + s/y 0 rejoin [" " code]
+        ]
     ] [
         splice d/text insert-option-at d f 0 rejoin [" " code]
     ]

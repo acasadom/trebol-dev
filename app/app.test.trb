@@ -52,10 +52,12 @@ serve [
 "the name of a field"
 [
     click {field name "Name"}
-    type "Field name" "full-name"
-    see {field full-name "Name"}
-    type "Field name" "2x"
-    see "A name starts with a letter"
+    ; the face's text, Name, is a face of the screen too
+    type "text" "Who"
+    type "name" "full-name"
+    see {field full-name "Who"}
+    type "name" "2x"
+    see "it takes word"
 ]
 
 "dragging in the structure"
@@ -71,7 +73,7 @@ serve [
     pick-menu "Add" ["Layout" "Two columns"]
     see {grid 2}
     click {grid 2}
-    type "Columns" "1 2 1"
+    type "cols" "[1 2 1]"
     pick-menu "Add" ["Text" "Heading"]
     click "Save"
     not none? find written {    grid [1 2 1] [^/        text "Left"^/        text "Right"^/        heading "Heading"^/    ]^/}
@@ -80,6 +82,6 @@ serve [
     click {heading "Join us"}
     pick-menu "Add" ["Layout" "Two columns"]
     click {grid 2}
-    type "Columns" "0"
-    see "A number of columns"
+    type "cols" "two"
+    see "it takes integer! or block"
 ] 

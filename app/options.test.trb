@@ -49,7 +49,7 @@ edit-first: func [t fn [any-function!] args [block!]] [
     [field input face] = extract rows 2]
 [rows: option-rows select ui-style-defs 'chart
     ; kind once: the one right after the style and the one later are one option
-    1 = length? collect [foreach e second rows [if e/field = first [kind:] [keep e]]]]
+    1 = length? collect [foreach g second rows [if g/1/field = first [kind:] [keep g]]]]
 
 "setting"
 [{view [field "x" required]} = edit-first {view [field "x"]} :set-option reduce [entry 'input 'required none]]
@@ -78,3 +78,15 @@ edit-first: func [t fn [any-function!] args [block!]] [
 "what compose puts in"
 [[style entry] = whats {view [button menu (looks)]}]
 [[style computed] = whats {view [heading (title)]}]
+
+"blocks a function says no to"
+[[style entry block] = whats {view [grid 3 [text "a"]]}]
+[[style block block] = whats {view [grid [1 2] [text "a" text "b"]]}]
+[d: design-of {view [grid [1 2] [text "a" text "b"]]}  f: first faces-of d
+    ps: face-parts d f
+    all [(first [cols:]) = ps/2/e/field  (first [pane:]) = ps/3/e/field]]
+
+"right after the style"
+[d: design-of {view [chart [a "A"]]}  f: first faces-of d
+    e: none  foreach x get in select ui-style-defs 'chart 'entries [if all [x/how = 'label] [e: x]]
+    {view [chart income [a "A"]]} = set-option d f e [income]]

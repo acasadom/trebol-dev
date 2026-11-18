@@ -10,10 +10,10 @@ Trebol [
 import %model.trb
 import %demo.trb
 import %palette.trb
+import %options.trb
+import %props.trb
 import %trebol-code.js
 
-; the styles whose faces are fields of a form: they have a name and can be required
-inputs: [field password number money date date-range time area rich check toggle choice radio upload photo lookup rows widget slider]
 ; the styles whose block holds faces: what is added with one of them chosen goes inside it
 boxes: [view row column panel form grid scroll dialog]
 
@@ -26,6 +26,9 @@ chosen: none        ; the index of the chosen face in faces-of d
 problem: none       ; why the text does not load, when it does not
 demo: none          ; with no server: the files of the demo project, kept in the page
 demo-saved: none    ; and each as last downloaded
+prop-entries: []    ; the options the properties show, by the index their controls name
+props-query: ""     ; what the properties are narrowed to
+keep-props: false   ; a property being typed in: the panel stays, so the typing goes on
 
 ; the file API answers only the designer's own pages, which say so with this header
 api-get: func [url] [fetch/with url [headers: [X-Trebol-Dev "1"]]]
@@ -168,46 +171,124 @@ show-props: function [] [
     nothing-chosen/hidden: to logic! f
     unless f [exit]
     face-kind/text: face-name f
-    text-f/value: either string? f/text [f/text] [""]
-    ; faces that hold others and show no text of their own have none to change
-    text-f/hidden: all [not string? f/text  find [view row column form grid split tabs steps toolbar desktop divider] f/style]
-    name-f/hidden: not find inputs f/style
-    name-f/value: either f/name [form f/name] [""]
-    required-f/hidden: not find inputs f/style
-    required-f/value: has-rule? f 'required
-    i: cols-at f
-    cols-f/hidden: not i
-    if i [cols-f/value: mold/only pick first face-range d f i]
+    def: style-def-of d f
+    chain: copy []
+    while [def] [append chain form def/name  def: def/parent]
+    face-chain/text: form chain
+    either keep-props [set 'keep-props false] [fill-props]
 ]
 
-; where the columns of a grid are written: grid 3 [...], grid [1 2 1] [...]; an index in its loaded block
-cols-at: function [f] [
-    unless all [f/style = 'grid  r: face-range d f] [return none]
-    i: r/2
-    while [i < r/3] [
-        v: pick r/1 i
-        if all [word? v  v = 'grid] [break]
-        i: i + 1
+; the controls of the chosen face's options or handlers, laid out anew from what its style takes
+fill-props: function [] [
+    unless f: the-face [exit]
+    either props-tab/value = "Events" [
+        props-list/pane: layout/only events-code d f props-query 'prop-act
+    ] [
+        p: props-code d f props-query 'prop-act
+        set 'prop-entries p/2
+        props-list/pane: layout/only p/1
     ]
-    i: i + 1
-    if all [i < r/3  any [integer? pick r/1 i  block? pick r/1 i]] [return i]
+]
+
+; what a control of the properties did: the k-th option (a group of entries), or 0 for the
+; texts, what it follows and handlers
+prop-act: function [k [integer!] what [word!] value] [
+    g: either k > 0 [pick prop-entries k] [none]
+    if what = 'check [return either g [prop-check g value] [true]]
+    unless f: the-face [exit]
+    e: all [g  first g]
+    ; typing goes on in the control: the panel is laid out again only for a choice or a removal
+    if find [values code text hint is calc react event] what [set 'keep-props true]
+    t: switch what [
+        flag [either value [set-option d f e none] [remove-option d f e]]
+        choice [set-option d f e reduce [to word! value]]
+        custom [either value/2 [set-option/rule d f e none value/1] [remove-option/rule d f e value/1]]
+        values [prop-values f g value]
+        code [
+            either empty? trim copy value [remove-option d f e] [
+                b: attempt [load value]
+                either block? b [set-option d f e reduce [b]] [none]
+            ]
+        ]
+        remove [
+            either e/how = 'custom [
+                ; every rule of a program the face has goes
+                foreach w custom-rule-words [
+                    if option-of/rule face-parts d f e w [change-text remove-option/rule d f e w  f: the-face]
+                ]
+                none
+            ] [
+                q: group-part face-parts d f g
+                either q [remove-option d f q/2] [none]
+            ]
+        ]
+        text [set-face-text d f value]
+        hint [set-hint d f value]
+        is calc react [
+            b: attempt [load value]
+            set-reaction d f what either all [block? b  not empty? b] [b] [none]
+        ]
+        event [
+            b: all [string? value/2  not empty? trim copy value/2  attempt [load value/2]]
+            either block? b [set-event d f value/1 b] [remove-event d f value/1]
+        ]
+    ]
+    either t [edit t] [set 'keep-props false]
+]
+
+; what is typed for an option, as the values of the entry of its group that takes them, or none
+typed-as: function [g [block!] value [string!]] [
+    vals: attempt [load/all value]
+    unless block? vals [return none]
+    foreach e g [
+        case [
+            find [name label] e/how [if all [1 = length? vals  word? first vals] [return reduce [e vals]]]
+            ; a block is typed as it is shown: [1 2 1]
+            e/how = 'block [if all [1 = length? vals  block? first vals] [return reduce [e vals]]]
+            true [
+                vs: vals
+                ; a text is typed as it is shown, with or without its quotes
+                if all [find e/args 'text  not string? first vals] [vs: reduce [value]]
+                if all [(length? vs) = length? e/args  args-take? e/args vs] [return reduce [e vs]]
+            ]
+        ]
+    ]
     none
 ]
 
-; what is typed as the columns: 3, or a weight per column (1 2 1), small, medium or large for a fixed width
-cols-of: function [value] [
-    v: attempt [load value]
-    case [
-        all [integer? v  v > 0  v <= 12] [v]
-        all [block? v  not empty? v  parse v [some [integer! | 'small | 'medium | 'large]]] [v]
-        true [none]
+args-take?: function [args [block!] vals [block!]] [
+    repeat i length? args [
+        a: pick args i  v: pick vals i
+        ok: case [
+            a = 'text [any [string? :v  map? :v  lit-word? :v]]
+            'one-of = first a [all [word? :v  to logic! find either word? a/2 [get a/2] [a/2] v]]
+            true [
+                rule: copy []
+                foreach t a [unless empty? rule [append rule '|]  append rule t]
+                parse reduce [:v] rule
+            ]
+        ]
+        unless ok [return false]
     ]
+    true
 ]
 
-set-cols: function [value] [
-    f: the-face
-    unless all [f  i: cols-at f  v: cols-of value] [exit]
-    edit replace-value d first face-range d f i v
+prop-check: function [g [block!] value] [
+    if any [not string? value  empty? trim copy value  typed-as g value] [return true]
+    m: copy ""
+    foreach e g [unless empty? m [append m " or "]  append m type-of-args e]
+    rejoin ["it takes " m]
+]
+
+; values typed for an option: written when they are what it takes, taken out when emptied
+prop-values: function [f g [block!] value [string!]] [
+    q: group-part face-parts d f g
+    if empty? trim copy value [return either q [remove-option d f q/2] [none]]
+    unless t: typed-as g value [return none]
+    e: t/1  vals: t/2
+    if e/how = 'name [return set-face-name d f first vals]
+    ; written in another of its ways: in place of it
+    either all [q  not same? q/2 e] [set-option/over d f e vals q/1] [set-option d f e vals]
 ]
 
 ; the loaded block that holds a box's faces
@@ -215,19 +296,6 @@ pane-block: function [f] [
     unless all [find boxes f/style  r: face-range d f] [return none]
     b: pick r/1 r/3
     either block? b [b] [none]
-]
-
-; a field's name is a word: letters, digits and - after a letter
-name-ok?: function [value] [
-    if any [none? value  empty? value] [return true]
-    either parse value [letter any [letter | digit | #"-"]] [true] ["A name starts with a letter and holds letters, digits and -"]
-]
-letter: charset [#"a" - #"z" #"A" - #"Z"]
-digit: charset "0123456789"
-
-has-rule?: function [f name [word!]] [
-    if f/rules [foreach r f/rules [if all [block? r  name = first r] [return true]]]
-    false
 ]
 
 choose-face: function [id] [
@@ -369,14 +437,10 @@ view compose/deep/only [
             global nothing-chosen: text muted "Choose a face in the structure, the preview or the code."
             global props: column hidden [
                 global face-kind: code ""
-                global text-f: field "Text" [edit set-face-text d the-face value]
-                global name-f: field "Field name" check [name-ok? value] [
-                    if true = name-ok? value [edit set-face-name d the-face either empty? value [none] [to word! value]]
-                ]
-                global required-f: check "Required" on-change [edit toggle-flag d the-face 'required]
-                global cols-f: field "Columns" hidden
-                    check [either cols-of value [true] ["A number of columns (3), or a weight for each (1 2 1); small, medium or large is a fixed width"]]
-                    [set-cols value]
+                global face-chain: text small muted ""
+                global props-tab: radio "Show" ["Options" "Events"] segmented on-change [fill-props]
+                global props-find: field "Find an option" on-change [set 'props-query any [value ""]  fill-props]
+                global props-list: column []
                 row [
                     button #arrow-up "Up" [step-face -1]
                     button #arrow-down "Down" [step-face 1]
@@ -389,4 +453,5 @@ view compose/deep/only [
 ]
 
 mode-f/value: "Split"
+props-tab/value: "Options"
 read-files
