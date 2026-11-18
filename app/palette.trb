@@ -46,6 +46,9 @@ palette: [
     tile #folder "Tile" []
 ]}
         divider "Divider" {divider}
+        device "A phone's screen" {device phone [
+    text "On a phone"
+]}
     ]
     "Text" [
         title "Title" {title "Title"}

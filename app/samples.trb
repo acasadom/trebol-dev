@@ -1,0 +1,46 @@
+Trebol [
+    title: "Rows made up for the preview, so a table, list, chart or board shows what it would; never saved"
+    exports: [fill-samples]
+]
+
+; A face that shows rows has none while it is designed: its rows come when the program runs. The
+; preview gives it a few made up from what it says it shows, its columns or its lanes, so the
+; screen looks as it will. They are put in the preview's faces only, never in the text.
+
+sample-rows: function [f [object!] n [integer!]] [
+    case [
+        all [in f 'lanes  block? f/lanes  not empty? f/lanes  f/field] [
+            lanes: extract f/lanes 2
+            collect [repeat i n [
+                m: make map! reduce ['title rejoin ["Card " i]]
+                put m f/field pick lanes 1 + ((i - 1) // length? lanes)
+                keep m
+            ]]
+        ]
+        all [in f 'columns  block? f/columns  not empty? f/columns] [
+            ws: extract f/columns 2
+            collect [repeat i n [
+                m: make map! []
+                repeat j length? ws [
+                    put m pick ws j either j = 1 [rejoin [form pick ws 1 " " i]] [10 * i + (7 * j) // 23]
+                ]
+                keep m
+            ]]
+        ]
+        true [none]
+    ]
+]
+
+fill-samples: function [
+    "Gives each face in faces (and in theirs) that shows rows and has none a few made up rows"
+    faces [block!]
+] [
+    foreach f faces [
+        if object? f [
+            if all [in f 'data  any [none? f/data  all [block? f/data  empty? f/data]]] [
+                if rows: sample-rows f 4 [f/data: rows]
+            ]
+            if block? get in f 'pane [fill-samples f/pane]
+        ]
+    ]
+]

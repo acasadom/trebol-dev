@@ -12,10 +12,11 @@ import %demo.trb
 import %palette.trb
 import %options.trb
 import %props.trb
+import %samples.trb
 import %trebol-code.js
 
 ; the styles whose block holds faces: what is added with one of them chosen goes inside it
-boxes: [view row column panel form grid scroll dialog]
+boxes: [view row column panel form grid scroll dialog device]
 
 files: copy []
 path: none          ; the file being designed, from the project's folder
@@ -154,6 +155,7 @@ redraw: function [] [
     if all [chosen  chosen > length? fs] [set 'chosen none]
     structure/selected: node-of chosen structure/data
     preview/pane: collect [foreach l d/layouts [if l/view [keep l/view/pane]]]
+    fill-samples preview/pane
     mark-chosen
     problems/data: collect [
         foreach l d/layouts [foreach [p m] l/problems [keep make map! reduce ['at any [loaded-at p ""] 'message m]]]
@@ -199,9 +201,11 @@ prop-act: function [k [integer!] what [word!] value] [
     e: all [g  first g]
     ; typing goes on in the control: the panel is laid out again only for a choice or a removal
     if find [values code text hint is calc react event] what [set 'keep-props true]
+    ; a picked icon shows in the panel: laid out again
     t: switch what [
         flag [either value [set-option d f e none] [remove-option d f e]]
         choice [set-option d f e reduce [to word! value]]
+        icon [prop-values f g mold to issue! form value]
         custom [either value/2 [set-option/rule d f e none value/1] [remove-option/rule d f e value/1]]
         values [prop-values f g value]
         code [
@@ -424,7 +428,12 @@ view compose/deep/only [
         ]
         global centre: grid fit [1 1] [
             global preview-pane: panel "Preview" [
-                global preview: column inert on-select [pick-face event/face] []
+                global device-f: radio "Screen" ["Desktop" "Tablet" "Phone"] segmented on-change [
+                    frame/screen: select ["Desktop" 1280x800 "Tablet" 834x1112 "Phone" 390x844] value
+                ]
+                global frame: device desktop fit [
+                    global preview: column inert on-select [pick-face event/face] []
+                ]
                 global problems: table [at "Where" message "Problem"] hidden
             ]
             global code-pane: panel "Code" pad 2 [
@@ -454,4 +463,5 @@ view compose/deep/only [
 
 mode-f/value: "Split"
 props-tab/value: "Options"
+device-f/value: "Desktop"
 read-files

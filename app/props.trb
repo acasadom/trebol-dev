@@ -15,6 +15,7 @@ import %options.trb
 ;   act k 'code "[...]"     a block, as typed
 ;   act k 'custom [w true]  a rule a program adds, on or off
 ;   act k 'remove none      out of the code
+;   act k 'icon 'heart      an icon picked
 ;   act k 'check "2 x"      whether what is typed is what it takes: true, or what is wrong
 ; and the texts, what it follows and its handlers: act 0 'text "x", act 0 'hint "x",
 ; act 0 'is "[...]", act 0 'react "[...]", act 0 'event [on-change "[...]"].
@@ -114,6 +115,16 @@ control-of: function [g [block!] k [integer!] has vals act [word!] words] [
                 compose/deep [text small (label) radio (label) [(cs)] segmented with [value: (v)] on-change [(act) (k) 'choice value]]
             ] [
                 compose/deep [choice (label) [(cs)] with [value: (v)] on-change [if value [(act) (k) 'choice value]]]
+            ]
+        ]
+        ; an icon: typed, or picked from those Trebol brings
+        if all [1 = length? e/args  [issue!] = first e/args] [
+            items: collect [foreach w ui-icons [keep to issue! form w  keep form w  keep w]]
+            return compose/deep [
+                row middle [
+                    field (label) "#icon" fill with [value: (shown)] check [(act) (k) 'check value] on-change [(act) (k) 'values value]
+                    button (either all [has  issue? first vals] [first vals] [#search]) "Pick" small menu [(items)] on-menu [(act) (k) 'icon event/picked]
+                ]
             ]
         ]
         if block-arg? e [

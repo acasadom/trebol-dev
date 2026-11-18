@@ -1,0 +1,17 @@
+Trebol [title: "Rows made up for the preview" app: none]
+
+import %samples.trb
+
+faces-of-code: func [code] [first ui-sketch second load code]
+
+"a table, a chart and a board get rows of what they show"
+[v: faces-of-code {view [table [name "Name" age "Age"]]}  fill-samples v/pane
+    t: first v/pane  all [4 = length? t/data  "name 1" = select first t/data 'name  integer? select first t/data 'age]]
+[v: faces-of-code {view [chart bar [month "Month" total "Total"]]}  fill-samples v/pane
+    4 = length? get in first v/pane 'data]
+[v: faces-of-code {view [board by status [todo "To do" done "Done"]]}  fill-samples v/pane
+    b: first v/pane  all [4 = length? b/data  'done = select second b/data 'status]]
+"inside a box too, and rows it has stay"
+[v: faces-of-code {view [panel [list [name "Name"]]]}  fill-samples v/pane
+    4 = length? get in first get in first v/pane 'pane 'data]
+[v: faces-of-code {view [text "x"]}  fill-samples v/pane  none? get in first v/pane 'data]

@@ -64,3 +64,5 @@ sketch-ok?: function [b [block!]] [
     p: panels-of {rating "Rate" stars 3} ""
     all [sketch-ok? p/1  has? p/1 "stars"  has? p/1 "3"]
 ]
+"an icon is picked from those Trebol brings"
+[p: panels-of {button #star "Go"} ""  all [has? p/1 "Pick"  has? p/1 "#heart"]]
