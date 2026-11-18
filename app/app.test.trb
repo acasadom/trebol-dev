@@ -196,6 +196,20 @@ serve [
     not none? find written {field name "Name"^/                money "Price"^/            ]}
 ]
 
+"every screen's tables have rows to show"
+[
+    ; the design is read again while another screen is on show: the table's screen gets rows too
+    choose "File" "pages.trb"
+    click {text "Who we are"}
+    pick-menu "Add" ["Data" "Table"]
+    click {heading "Welcome"}
+    type "text" "Hello"
+    click {table}
+    t: none
+    foreach f preview/pane/1/pane/1/pane [if f/style = 'table [t: f]]
+    4 = length? t/data
+]
+
 "tabs and steps"
 [
     choose "File" "tabs.trb"

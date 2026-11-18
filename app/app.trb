@@ -179,6 +179,8 @@ redraw: function [] [
     show-screens
     preview/pane: collect [foreach l d/layouts [if l/view [keep l/view/pane]]]
     fill-samples preview/pane
+    ; every screen, not only the one on show: choosing a face on another shows it with its rows
+    foreach [f them] d/screens [fill-samples them]
     mark-chosen
     problems/data: collect [
         foreach l d/layouts [foreach [p m] l/problems [keep make map! reduce ['at any [loaded-at p ""] 'message m]]]
