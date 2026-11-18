@@ -78,6 +78,17 @@ serve [
     click "Save"
     not none? find written {field name "Name"  ; theirs^/    check "Checkbox"^/]}
 ]
+[
+    ; what is added is the face chosen: its text is typed next
+    click "view"
+    pick-menu "Add" ["Layout" "Form"]
+    pick-menu "Add" ["Input" "Field"]
+    type "text" "Email"
+    see {field "Email"}
+    pick-menu "Add" ["Action" "Submit"]
+    click "Save"
+    not none? find written {    form [^/        field "Email"^/        submit "Submit"^/    ]^/]}
+]
 
 "the name of a field"
 [

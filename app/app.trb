@@ -470,11 +470,19 @@ count-inside: function [f] [
 add-face: function [item [word!]] [
     unless code: palette-code item [exit]
     f: the-face
-    case [
-        all [f  b: pane-block f] [edit insert-into d b code]
-        f [edit insert-after d f code]
-        not empty? d/layouts [edit insert-into d d/layouts/1/block code]
+    ; what is added is chosen: it comes right after the faces of the one it goes in or after
+    at: none
+    t: case [
+        all [f  b: pane-block f] [at: chosen + 1 + count-inside f  insert-into d b code]
+        f [at: chosen + 1 + count-inside f  insert-after d f code]
+        all [not empty? d/layouts  v: d/layouts/1/view] [
+            at: 1 + count-inside v
+            insert-into d d/layouts/1/block code
+        ]
     ]
+    unless t [exit]
+    edit t
+    if all [at  not problem  pick shown-faces d at] [choose-face at]
 ]
 
 ; the Add menu comes from the palette
