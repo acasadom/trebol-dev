@@ -235,6 +235,16 @@ events-code: function [
     ; those it has first
     evs: union intersect evs extract have 2 evs
     code: copy []
+    ; what it does when clicked: the block after it; a view's words have none
+    if all [not layout-of d f  any [empty? query  find "action click" query]] [
+        a: none
+        foreach q parts [if q/what = 'action [a: pick r/1 q/from]]
+        append code compose/deep [
+            row middle spread [text "action" (either a [compose/deep [button #close "" small [(act) 0 'action none]]] [[]])]
+            widget <trebol-code-small> [] with [value: (either a [mold a] [""])] on-change [(act) 0 'action value]
+            text small muted "the block after it: runs when it is clicked"
+        ]
+    ]
     foreach ev evs [
         if any [empty? query  find form ev query] [
             b: select have ev

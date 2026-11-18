@@ -2,7 +2,7 @@ Trebol [
     title: "What each value a face was written with is, read from what its style takes, and the edits of its options"
     exports: [
         style-def-of face-parts option-rows option-of group-part row-values custom-rule-words
-        set-option remove-option set-event remove-event set-reaction set-hint
+        set-option remove-option set-event remove-event set-reaction set-hint set-action
         insert-option-at values-span
     ]
 ]
@@ -348,6 +348,21 @@ set-event: function ["The text with a face's handler of an event set to code" d 
     ] [
         s: face-span d f
         splice d/text s/x + s/y 0 rejoin [" " ev " " mold code]
+    ]
+]
+
+set-action: function [
+    "The text with what a face does when clicked, the block after it, set to code; none takes it out"
+    d [object!] f [object!] code [block! none!]
+] [
+    r: face-range d f
+    p: part-of face-parts d f 'action none
+    case [
+        all [p code] [replace-value d r/1 p/to code]
+        p [cut d/text values-span d r/1 p/from p/to]
+        ; blocks are taken in turn: the action comes after them all
+        code [s: face-span d f  splice d/text s/x + s/y 0 rejoin [" " mold code]]
+        true [d/text]
     ]
 ]
 

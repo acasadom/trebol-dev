@@ -106,3 +106,9 @@ edit-first: func [t fn [any-function!] args [block!]] [
     {view [width small fill text "a"]} = set-option d first shown-faces d entry/kw 'face 'fill 'fill none
 ]
 [d: design-of {view []}  {view [^/    fill^/]} = set-option d first shown-faces d entry/kw 'face 'fill 'fill none]
+
+"what a face does when clicked"
+[{view [button "Go" [go]]} = edit-first {view [button "Go"]} :set-action [[go]]]
+[{view [button "Go" [stop]]} = edit-first {view [button "Go" [go]]} :set-action [[stop]]]
+[{view [button "Go"]} = edit-first {view [button "Go" [go]]} :set-action reduce [none]]
+[{view [panel [text "a"] [go]]} = edit-first {view [panel [text "a"]]} :set-action [[go]]]
