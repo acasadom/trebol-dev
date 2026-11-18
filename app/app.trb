@@ -23,7 +23,7 @@ path: none          ; the file being designed, from the project's folder
 text: ""            ; its text now
 saved: ""           ; its text as last read or saved
 d: none             ; the design read from text
-chosen: none        ; the index of the chosen face in faces-of d
+chosen: none        ; the index of the chosen face in shown-faces d
 problem: none       ; why the text does not load, when it does not
 demo: none          ; with no server: the files of the demo project, kept in the page
 demo-saved: none    ; and each as last downloaded
@@ -95,7 +95,7 @@ change-text: function [t [string!]] [
 
 edit: function [t [string! none!]] [if t [change-text t]]
 
-the-face: does [all [d chosen  pick faces-of d chosen]]
+the-face: does [all [d chosen  pick shown-faces d chosen]]
 
 face-name: function [f] [
     s: form style-word d f
@@ -150,8 +150,8 @@ redraw: function [] [
     problem-text/hidden: not problem
     problem-text/text: any [problem ""]
     unless d [exit]
-    fs: faces-of d
-    structure/data: collect [foreach l d/layouts [if l/view [keep nodes-of l/view/pane fs]]]
+    fs: shown-faces d
+    structure/data: collect [foreach l d/layouts [if l/view [keep nodes-of reduce [l/view] fs]]]
     if all [chosen  chosen > length? fs] [set 'chosen none]
     structure/selected: node-of chosen structure/data
     preview/pane: collect [foreach l d/layouts [if l/view [keep l/view/pane]]]
@@ -173,6 +173,8 @@ show-props: function [] [
     nothing-chosen/hidden: to logic! f
     unless f [exit]
     face-kind/text: face-name f
+    ; a view holds the rest: it is neither moved nor deleted
+    face-moves/hidden: to logic! layout-of d f
     def: style-def-of d f
     chain: copy []
     while [def] [append chain form def/name  def: def/parent]
@@ -297,6 +299,7 @@ prop-values: function [f g [block!] value [string!]] [
 
 ; the loaded block that holds a box's faces
 pane-block: function [f] [
+    if l: layout-of d f [return l/block]
     unless all [find boxes f/style  r: face-range d f] [return none]
     b: pick r/1 r/3
     either block? b [b] [none]
@@ -319,7 +322,7 @@ mark-chosen: function [] [
 
 ; a face clicked in the preview
 pick-face: function [f [object!]] [
-    if n: find/same faces-of d f [choose-face index? n]
+    if n: find/same shown-faces d f [choose-face index? n]
 ]
 
 ; the cursor put in the code: the innermost face written around it
@@ -327,7 +330,7 @@ caret-at: function [at [integer!]] [
     unless d [exit]
     best: none
     n: 0
-    foreach f faces-of d [
+    foreach f shown-faces d [
         n: n + 1
         if all [s: face-span d f  at >= s/x  at <= (s/x + s/y)] [
             if any [not best  s/y <= best/2] [best: reduce [n s/y]]
@@ -350,10 +353,11 @@ foreach w ui-dialect-words [put code-words w either select styles w ['style] ['f
 ; up: the sibling before goes after it; down: it goes after the sibling after it
 step-face: function [by [integer!]] [
     f: the-face
-    unless f [exit]
+    ; a view stays where it is: it holds the rest
+    unless all [f  not layout-of d f] [exit]
     r: face-range d f
     before: after: none
-    foreach g faces-of d [
+    foreach g shown-faces d [
         q: face-range d g
         if all [same? head q/1 head r/1  not same? g f] [
             if q/3 < r/2 [before: g]
@@ -370,12 +374,13 @@ step-face: function [by [integer!]] [
 ; a row dragged in the structure: its face goes where it was dropped among its siblings
 reorder: function [parent from [integer!] to [integer!]] [
     list: either parent [parent/children] [structure/data]
-    fs: faces-of d
+    fs: shown-faces d
     ; the tree has moved the row already: it is at to, and the one it went beside next to it
     a: pick list to
     b: pick list either to > from [to - 1] [to + 1]
     f: pick fs a/id
     g: pick fs b/id
+    if any [layout-of d f  layout-of d g] [redraw  exit]
     either to > from [
         edit move-face d f g
         set 'chosen b/id + (count-inside g) - count-inside f
@@ -450,7 +455,7 @@ view compose/deep/only [
                 global props-tab: radio "Show" ["Options" "Events"] segmented on-change [fill-props]
                 global props-find: field "Find an option" on-change [set 'props-query any [value ""]  fill-props]
                 global props-list: column []
-                row [
+                global face-moves: row [
                     button #arrow-up "Up" [step-face -1]
                     button #arrow-down "Down" [step-face 1]
                     button #trash "Delete" danger [edit remove-face d the-face  set 'chosen none  redraw]

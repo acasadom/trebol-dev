@@ -4,6 +4,7 @@ Trebol [
         design-of spot-of span-of face-range face-span face-code faces-of
         splice cut replace-value remove-face insert-after insert-into move-face
         set-face-text set-face-name face-label style-word toggle-flag
+        layout-of head-end block-span indent-at shown-faces
     ]
 ]
 
@@ -109,10 +110,30 @@ span-of: function [
     either block? sp [first sp] [sp]
 ]
 
+layout-of: function ["The layout whose view a face is, or none" d [object!] f [object!]] [
+    foreach l d/layouts [if same? l/view f [return l]]
+    none
+]
+
+head-end: function [
+    "The index of the last value before a layout's first face: its view's own words; 0 when there are none"
+    b [block!]
+] [
+    n: 1
+    while [n <= length? b] [
+        v: pick b n
+        if any [set-word? :v  paren? :v  'global = :v  all [word? :v  select styles v]] [break]
+        n: n + 1
+    ]
+    n - 1
+]
+
 face-range: function [
     "The values a face was written with: [block first last], indexes in the loaded block; none if made at run time"
     d [object!] f [object!]
 ] [
+    ; a view: the words before its first face
+    if l: layout-of d f [return reduce [l/block 1 head-end l/block]]
     unless f/written [return none]
     a: spot-of d f/written/1
     z: spot-of d f/written/2
@@ -124,10 +145,16 @@ face-span: function [
     "Where the text of a face sits: index x length"
     d [object!] f [object!]
 ] [
+    if l: layout-of d f [return block-span d l/block]
     unless r: face-range d f [return none]
     a: span-of d r/1 r/2
     z: span-of d r/1 r/3
     as-pair a/x z/x + z/y - a/x
+]
+
+block-span: function ["Where a loaded block sits, its brackets too" d [object!] b [block!]] [
+    foreach [blk sps own] d/blocks [if same? head blk head b [return own]]
+    none
 ]
 
 face-code: function ["The text a face was written with" d [object!] f [object!]] [
@@ -148,6 +175,24 @@ faces-of: function [
     ]
     foreach l d/layouts [if l/view [walk l/view/pane]]
     out
+]
+
+shown-faces: function [
+    "The faces the structure shows: each layout's view, then the faces written in it, as faces-of gives them"
+    d [object!]
+] [
+    out: copy []
+    fs: faces-of d
+    foreach l d/layouts [if l/view [
+        append out l/view
+        foreach f fs [if inside? f l/view [append out f]]
+    ]]
+    out
+]
+
+inside?: function [f [object!] v [object!]] [
+    if block? v/pane [foreach g v/pane [if any [same? g f  inside? f g] [return true]]]
+    false
 ]
 
 ; --- edits: each takes a design and gives the new text --------------------------------------
@@ -308,6 +353,7 @@ style-index: function [
 ]
 
 style-word: function ["The word a face was written with: submit for a submit button" d [object!] f [object!]] [
+    if layout-of d f [return 'view]
     r: face-range d f
     pick r/1 style-index d f
 ]
@@ -340,6 +386,7 @@ toggle-flag: function [
 ]
 
 face-label: function ["The word a face is set to, sign-up: panel, or none" d [object!] f [object!]] [
+    if layout-of d f [return none]
     r: face-range d f
     v: pick r/1 r/2
     if all [word? :v  'global = v] [v: pick r/1 r/2 + 1]

@@ -85,3 +85,12 @@ serve [
     type "cols" "two"
     see "it takes integer! or block"
 ] 
+
+"the view's own words"
+[
+    click "view"
+    see/not "what it says"
+    choose "width" "fill"
+    click "Save"
+    not none? find written {view [^/    width fill^/    heading "Join us"}
+]

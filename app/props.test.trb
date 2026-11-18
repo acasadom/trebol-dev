@@ -66,3 +66,9 @@ sketch-ok?: function [b [block!]] [
 ]
 "an icon is picked from those Trebol brings"
 [p: panels-of {button #star "Go"} ""  all [has? p/1 "Pick"  has? p/1 "#heart"]]
+"a view shows the words it takes before its faces: no text, no blocks, nothing it follows"
+[
+    d: design-of {view [width fill text "a"]}
+    p: props-code d first shown-faces d "" 'act
+    all [has? p/1 "Written"  has? p/1 "fill"  not has? p/1 "what it says"  not has? p/1 "Follows"  not has? p/1 "the faces it holds"]
+]

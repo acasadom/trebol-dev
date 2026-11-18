@@ -90,3 +90,19 @@ edit-first: func [t fn [any-function!] args [block!]] [
 [d: design-of {view [chart [a "A"]]}  f: first faces-of d
     e: none  foreach x get in select ui-style-defs 'chart 'entries [if all [x/how = 'label] [e: x]]
     {view [chart income [a "A"]]} = set-option d f e [income]]
+
+"a view: its words are those before its first face"
+[d: design-of {view [width fill on-key [go] text "a"]}  v: first shown-faces d  [1 4] = next face-range d v]
+[d: design-of {view [text "a"]}  v: first shown-faces d  [1 0] = next face-range d v]
+[d: design-of {view [width fill text "a"]}  [entry] = collect [foreach p face-parts d first shown-faces d [keep p/what]]]
+[d: design-of {view [width fill text "a"]}  'view = style-word d first shown-faces d]
+[d: design-of {view [width fill text "a"]}  [view text] = collect [foreach f shown-faces d [keep f/style]]]
+[
+    d: design-of {view [^/    text "a"^/]}
+    {view [^/    width fill^/    text "a"^/]} = set-option d first shown-faces d entry/kw 'face 'size 'width [fill]
+]
+[
+    d: design-of {view [width small text "a"]}
+    {view [width small fill text "a"]} = set-option d first shown-faces d entry/kw 'face 'fill 'fill none
+]
+[d: design-of {view []}  {view [^/    fill^/]} = set-option d first shown-faces d entry/kw 'face 'fill 'fill none]
