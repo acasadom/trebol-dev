@@ -5,7 +5,7 @@ Trebol [
         splice cut replace-value remove-face insert-after insert-into move-face
         set-face-text set-face-name face-label style-word toggle-flag
         layout-of head-end block-span indent-at shown-faces
-        pane-of own-block written-range values-at inside? set-screen screens-data add-screen
+        pane-of own-block written-range values-at inside? set-screen screens-data add-screen piece? set-piece-label add-piece
         set-face-label set-face-global
     ]
 ]
@@ -185,19 +185,47 @@ own-block: function [
     d [object!] f [object!]
 ] [
     if l: layout-of d f [return l/block]
-    if all [f/style = 'screen  r: written-range d f] [
+    if all [find [screen tab step] f/style  r: written-range d f] [
         b: pick r/1 r/3
         if block? b [return b]
     ]
     none
 ]
 
+piece?: func ["Whether a face is a piece of the face it is in, written there with its label: a tab or a step" f] [
+    to logic! find [tab step] f/style
+]
+
+set-piece-label: function ["The text with a tab's or a step's label changed" d [object!] f [object!] new [string!]] [
+    r: written-range d f
+    i: either word? pick r/1 r/2 [r/2 + 1] [r/2]
+    replace-value d r/1 i new
+]
+
+add-piece: function [
+    "The text with a new, empty tab or step last in its tabs or steps: f is that face or one of its pieces"
+    d [object!] f [object!] kind [word!]
+] [
+    b: none
+    either piece? f [b: first written-range d f] [
+        r: face-range d f
+        foreach v copy/part at r/1 r/2 r/3 - r/2 + 1 [if block? v [b: v]]
+    ]
+    unless b [return none]
+    n: 1 + to integer! (length? b) / 2
+    label: rejoin [either kind = 'tab ["Tab "] ["Step "] n]
+    ; steps a machine leads name the state of each
+    either word? first b [
+        insert-into d b rejoin ["state-" n " " mold label " []"]
+    ] [insert-into d b rejoin [mold label " []"]]
+]
+
 face-range: function [
     "The values a face was written with: [block first last], indexes in the loaded block; none if made at run time"
     d [object!] f [object!]
 ] [
-    ; a view or a screen: the words before its first face
-    if b: own-block d f [return reduce [b 1 head-end b]]
+    ; a view or a screen: the words before its first face; a tab or a step: none
+    if b: own-block d f [return reduce [b 1 either piece? f [0] [head-end b]]]
     unless f/written [return none]
     a: spot-of d f/written/1
     z: spot-of d f/written/2
@@ -210,7 +238,7 @@ face-span: function [
     d [object!] f [object!]
 ] [
     if l: layout-of d f [return block-span d l/block]
-    if all [f/style = 'screen  r: written-range d f] [return values-at d r/1 r/2 r/3]
+    if all [find [screen tab step] f/style  r: written-range d f] [return values-at d r/1 r/2 r/3]
     unless r: face-range d f [return none]
     a: span-of d r/1 r/2
     z: span-of d r/1 r/3

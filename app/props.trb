@@ -145,6 +145,19 @@ props-code: function [
     "The layout of a face's options, and the entries its controls name by index: [code entries]"
     d [object!] f [object!] query [string!] act [word!]
 ] [
+    ; a tab or a step: its label, and another after it; its block holds only faces
+    if piece? f [
+        kind: f/style
+        return reduce [compose/deep [
+            divider text small muted (either kind = 'tab ["Tab"] ["Step"]) column gap 2 [
+                field "label" "what it is called" with [value: (form f/text)] on-change [(act) 0 'piece-label value]
+                button #plus (either kind = 'tab ["Add a tab"] ["Add a step"]) small [(act) 0 'add-piece (to lit-word! kind)]
+            ]
+        ] copy []]
+    ]
+    if find [tabs steps] f/style [extra: compose/deep [
+        button #plus (either f/style = 'tabs ["Add a tab"] ["Add a step"]) small [(act) 0 'add-piece (to lit-word! either f/style = 'tabs ['tab] ['step])]
+    ]]
     def: style-def-of d f
     parts: face-parts d f
     r: face-range d f
@@ -231,6 +244,7 @@ props-code: function [
             ]
         ]
     ]
+    if extra [append code extra]
     unless empty? written [append code section "Written · in the code now" written]
     append code groups
     if all [not view?  any [empty? query  find "is react calc follows" query]] [
@@ -252,6 +266,7 @@ events-code: function [
     "The layout of a face's handlers: one for each event its style fires, written ones with their block"
     d [object!] f [object!] query [string!] act [word!]
 ] [
+    if piece? f [return [text muted "A tab or a step has no events of its own: its faces do."]]
     def: style-def-of d f
     parts: face-parts d f
     r: face-range d f

@@ -131,3 +131,12 @@ import %sample.trb
 [d: design-of {view [screens [home "Home" [text "a"] b "B" []]]}  {view [screens [b "B" []]]} = remove-face d second faces-of d]
 "the faces of a row of rows"
 [d: design-of {view [rows items [field name "Name" check ok "Done"]]}  [rows field check] = collect [foreach f faces-of d [keep f/style]]]
+"tabs and steps: each a face of the structure, its label edited, another added"
+[d: design-of {view [tabs ["A" [text "a"] "B" [text "b"]]]}  [tabs tab text tab text] = collect [foreach f faces-of d [keep f/style]]]
+[d: design-of {view [tabs ["A" [text "a"]]]}  {view [tabs ["Start" [text "a"]]]} = set-piece-label d second faces-of d "Start"]
+[d: design-of {view [steps ["A" when [x] [text "a"]]]}  {view [steps ["One" when [x] [text "a"]]]} = set-piece-label d second faces-of d "One"]
+[
+    d: design-of {view [^/    tabs [^/        "A" [text "a"]^/    ]^/]}
+    {view [^/    tabs [^/        "A" [text "a"]^/        "Tab 2" []^/    ]^/]} = add-piece d first faces-of d 'tab
+]
+[d: design-of {view [tabs ["A" [text "a"] "B" []]]}  {view [tabs ["B" []]]} = remove-face d second faces-of d]
