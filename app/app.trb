@@ -65,6 +65,8 @@ open-file: function [name [string!]] [
     t: either demo [select demo name] [api-get rejoin ["/api/file?path=" enhex name]]
     set 'saved either demo [select demo-saved name] [t]
     set 'chosen none
+    ; another file: nothing of the last one's design stays, even when this one does not load
+    set 'd none
     change-text t
 ]
 
@@ -161,7 +163,15 @@ redraw: function [] [
     code-view/value: text
     problem-text/hidden: not problem
     problem-text/text: any [problem ""]
-    unless d [exit]
+    unless d [
+        ; a file opened that does not load: no structure, preview nor properties until it does
+        structure/data: copy []
+        preview/pane: copy []
+        problems/hidden: true
+        props/hidden: true
+        nothing-chosen/hidden: false
+        exit
+    ]
     fs: shown-faces d
     structure/data: collect [foreach l d/layouts [if l/view [keep nodes-of reduce [l/view] fs]]]
     if all [chosen  chosen > length? fs] [set 'chosen none]

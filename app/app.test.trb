@@ -32,6 +32,11 @@ view [
     steps ["Start" [text "begin"] "End" [text "finish"]]
 ]
 }
+    "broken.trb" {Trebol [title: "Broken"]
+
+view [
+    heading "Half
+}
     "notes.trb" {Trebol [title: "Notes"]
 
 stylize [note: text [role: 'muted]]
@@ -43,7 +48,7 @@ view [
 written: none
 
 serve [
-    GET "/api/files" [#(name: "shop" files: ["app.trb" "notes.trb" "pages.trb" "tabs.trb"])]
+    GET "/api/files" [#(name: "shop" files: ["app.trb" "broken.trb" "notes.trb" "pages.trb" "tabs.trb"])]
     GET "/api/file" [select disk query/path]
     PUT "/api/file" [written: body  "Saved."]
 ]
@@ -200,4 +205,12 @@ serve [
 [
     choose "File" "notes.trb"
     all ['style = select code-view/props/words 'note  'style = select code-view/props/words 'heading]
+]
+
+"a file that does not load"
+[
+    choose "File" "broken.trb"
+    see "Not saved: the code does not load"
+    see/not {heading "Join us"}
+    empty? structure/data
 ]
