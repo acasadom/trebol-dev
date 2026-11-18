@@ -111,7 +111,8 @@ control-of: function [g [block!] k [integer!] has vals act [word!] words] [
         if a: one-of-arg e [
             cs: collect [foreach c choices-of a [keep form c]]
             v: either has [form first vals] [none]
-            return either 3 >= length? cs [
+            ; joined buttons while they fit the panel, a choice otherwise
+            return either all [3 >= length? cs  16 >= length? rejoin cs] [
                 compose/deep [text small (label) radio (label) [(cs)] segmented with [value: (v)] on-change [(act) (k) 'choice value]]
             ] [
                 compose/deep [choice (label) [(cs)] with [value: (v)] on-change [if value [(act) (k) 'choice value]]]
