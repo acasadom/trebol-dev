@@ -186,6 +186,15 @@ serve [
     click "Save"
     not none? find written {field name "Name"^/                check "Checkbox"^/            ]}
 ]
+[
+    ; a row of rows written on one line: what is added goes beside it, and is the one chosen
+    choose "File" "pages.trb"
+    click {rows items}
+    pick-menu "Add" ["Input" "Money"]
+    type "text" "Price"
+    click "Save"
+    not none? find written {field name "Name"^/                money "Price"^/            ]}
+]
 
 "tabs and steps"
 [

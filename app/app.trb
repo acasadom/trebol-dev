@@ -472,7 +472,8 @@ reorder: function [parent from [integer!] to [integer!]] [
 ; how many faces of the structure a face holds: the chosen index jumps them
 count-inside: function [f] [
     n: 0
-    foreach g any [pane-of d f []] [if g/written [n: n + 1 + count-inside g]]
+    ; as the structure lists them: every face written, and those inside one that is not, as the entry of rows
+    foreach g any [pane-of d f []] [n: n + (either face-range d g [1] [0]) + count-inside g]
     n
 ]
 
