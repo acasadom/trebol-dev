@@ -11,6 +11,9 @@ npx trebol-dev my-app     # or in another one
 
 It opens on <http://localhost:5180/> (`--port` picks another). Only this machine reaches it.
 
+New to it? The [manual](docs/manual/README.md) walks through a small project, from an empty view to an app
+with screens, tabs and styles of its own.
+
 ## What it does
 
 The window holds it all, with no page scroll: the structure on the left, the properties on the right, and in
