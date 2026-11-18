@@ -179,6 +179,8 @@ class TrebolCode extends HTMLElement {
     if (this.#view) return;
     // as wide as its place, whatever the lines: they scroll inside it
     this.style.contain = 'inline-size';
+    // the person left it: what they typed is read now
+    this.addEventListener('focusout', () => this.#left());
     this.#view = new EditorView({
       parent: this,
       state: this.#state(this.#text),
@@ -198,7 +200,6 @@ class TrebolCode extends HTMLElement {
         keymap.of([indentWithTab, ...defaultKeymap, ...historyKeymap, ...searchKeymap]),
         EditorView.contentAttributes.of({ 'aria-label': this.getAttribute('aria-label') ?? 'Code' }),
         EditorView.updateListener.of(u => this.#update(u)),
-        EditorView.domEventHandlers({ blur: () => this.#left() }),
       ],
     });
   }

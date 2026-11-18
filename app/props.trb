@@ -84,7 +84,7 @@ control-of: function [g [block!] k [integer!] has vals act [word!] words] [
         if all [has  1 = length? vals  block? first vals] [shown: mold first vals]
         return compose/deep [field (label) (hint) with [value: (shown)] check [(act) (k) 'check value] on-change [(act) (k) 'values value]]
     ]
-    label: form any [e/kw  either set-word? e/field [to word! e/field] [e/field]]
+    label: form any [e/kw  if e/how = 'label ['label]  either set-word? e/field [to word! e/field] [e/field]]
     help: any [e/help ""]
     shown: either has [mold/only vals] [""]
     switch/default e/how [
@@ -110,8 +110,8 @@ control-of: function [g [block!] k [integer!] has vals act [word!] words] [
         if a: one-of-arg e [
             cs: collect [foreach c choices-of a [keep form c]]
             v: either has [form first vals] [none]
-            return either 4 >= length? cs [
-                compose/deep [radio (label) [(cs)] segmented with [value: (v)] on-change [(act) (k) 'choice value]]
+            return either 3 >= length? cs [
+                compose/deep [text small (label) radio (label) [(cs)] segmented with [value: (v)] on-change [(act) (k) 'choice value]]
             ] [
                 compose/deep [choice (label) [(cs)] with [value: (v)] on-change [if value [(act) (k) 'choice value]]]
             ]
@@ -125,6 +125,9 @@ control-of: function [g [block!] k [integer!] has vals act [word!] words] [
         compose/deep [field (label) (type-of-args e) with [value: (shown)] check [(act) (k) 'check value] on-change [(act) (k) 'values value]]
     ]
 ]
+
+; a part of the panel: a line, its title, then its controls
+section: func [title [string!] body [block!]] [compose/deep [divider text small muted (title) column gap 2 [(body)]]]
 
 props-code: function [
     "The layout of a face's options, and the entries its controls name by index: [code entries]"
@@ -159,14 +162,14 @@ props-code: function [
                 help: any [e/help ""]
                 either p [
                     append written compose/deep [
-                        row middle [column fill [(c) text small muted (help)] button #close "" small [(act) (k) 'remove none]]
+                        row middle [column fill gap 0 [(c) text small muted (help)] button #close "" small [(act) (k) 'remove none]]
                     ]
                 ] [
-                    append g compose [(c) text small muted (help)]
+                    append g compose/deep [column gap 0 [(c) text small muted (help)]]
                 ]
             ]
         ]
-        unless empty? g [append groups compose/deep [panel (form style) [(g)]]]
+        unless empty? g [append groups section (rejoin [form style either style = def/name [" · its own"] [""]]) g]
     ]
     code: copy []
     ; what it says and what it follows: every face has them
@@ -177,13 +180,13 @@ props-code: function [
     ]
     if any [empty? query  find "text hint" query] [
         append code compose/deep [
-            panel "Text" [
+            divider text small muted "Text" column gap 2 [
                 field "text" "what it says" with [value: (either string? t [t] [""])] on-change [(act) 0 'text value]
                 field "hint" "shown while it is empty" with [value: (either string? h [h] [""])] on-change [(act) 0 'hint value]
             ]
         ]
     ]
-    unless empty? written [append code compose/deep [panel "Written" [(written)]]]
+    unless empty? written [append code section "Written · in the code now" written]
     append code groups
     if any [empty? query  find "is react calc follows" query] [
         fs: copy []
@@ -195,7 +198,7 @@ props-code: function [
                 widget <trebol-code-small> [] with [value: (either v [mold v] [""])] on-change [(act) 0 (to lit-word! kind) value]
             ]
         ]
-        append code compose/deep [panel "Follows other faces" [(fs) text small muted "is: its value is what the block gives, each time what it reads changes; calc: the same, and it cannot be typed in; react: runs again each time"]]
+        append code compose/deep [divider text small muted "Follows other faces" column gap 2 [(fs) text small muted "is: its value is what the block gives, each time what it reads changes; calc: the same, and it cannot be typed in; react: runs again each time"]]
     ]
     reduce [code entries]
 ]
@@ -212,13 +215,15 @@ events-code: function [
     evs: either block? def/events [copy def/events] [copy []]
     ; a style told any event fires what it is given: those written, then any of the dialect
     if def/events = 'any [evs: union extract have 2 keys-of event-help]
+    ; those it has first
+    evs: union intersect evs extract have 2 evs
     code: copy []
     foreach ev evs [
         if any [empty? query  find form ev query] [
             b: select have ev
             help: any [select event-help ev ""]
             append code compose/deep [
-                row middle spread [code (form ev) (either b [compose/deep [button #close "" small [(act) 0 'event reduce [(to lit-word! ev) none]]]] [[]])]
+                row middle spread [text (form ev) (either b [compose/deep [button #close "" small [(act) 0 'event reduce [(to lit-word! ev) none]]]] [[]])]
                 widget <trebol-code-small> [] with [value: (either b [mold b] [""])] on-change [(act) 0 'event reduce [(to lit-word! ev) value]]
                 text small muted (help)
             ]
