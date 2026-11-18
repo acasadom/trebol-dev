@@ -109,15 +109,29 @@ palette-code: function [item [word!]] [
     foreach [group items] palette [
         foreach [w label code] items [if w = item [return code]]
     ]
+    ; a style the file defines: its word, and a block when it holds faces
+    if def: select ui-style-defs item [
+        while [def] [
+            if def/name = 'container [return rejoin [item " []"]]
+            def: def/parent
+        ]
+        return form item
+    ]
     none
 ]
 
-; the Add menu: a submenu per group
-palette-menu: function [] [
-    collect [
+; the Add menu: a submenu per group, and one of the styles the file defines
+palette-menu: function [/own words [block!]] [
+    out: collect [
         foreach [group items] palette [
             keep group
             keep/only collect [foreach [w label code] items [keep label  keep w]]
         ]
     ]
+    words: exclude any [words copy []] [view]
+    unless empty? words [
+        append out "This file"
+        append/only out collect [foreach w words [keep form w  keep w]]
+    ]
+    out
 ]

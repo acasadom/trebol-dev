@@ -1,6 +1,7 @@
 Trebol [title: "The Add menu: every item loads with no problem" app: none]
 
 import %palette.trb
+import %model.trb
 
 "every item of the Add menu is code that loads, a face with no problem"
 [
@@ -20,4 +21,10 @@ import %palette.trb
     missing: exclude words-of styles have
     ; screens and screen are the app's own screens, tab and step are made by tabs and steps, entry by rows, backdrop goes behind a box, widget needs a page's JavaScript, orbit a graph of data
     empty? exclude missing [screens screen tab step entry backdrop widget orbit view]
+]
+"the styles a file defines are in the Add menu"
+[
+    d: design-of {stylize [note: text [role: 'muted]  box: panel []]  view [note "a"]}
+    m: palette-menu/own d/own
+    all [find m "This file"  "note []" <> palette-code 'note  "box []" = palette-code 'box  "note" = palette-code 'note]
 ]

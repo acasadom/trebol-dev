@@ -45,6 +45,8 @@ design-of: function [
         spots: none     ; "line:col" -> [span block index]
         blocks: none    ; [block spans own ...]: each loaded block, its values' spans and its own (none at the top)
         layouts: none   ; block of objects: kind block view problems
+        defs: none      ; style -> style-def of the styles the file redefines
+        own: none       ; the styles the file defines or redefines, that a layout writes
     ]
     d/text: text
     d/values: values
@@ -75,12 +77,41 @@ design-of: function [
                 append d/layouts make object! [kind: k  block: b  view: r/1  problems: r/2]
                 find-layouts b
             )
+            ; stylize [view: view [...]] defines a style: its blocks are no layouts
+            | 'stylize block!
             | set b [block! | paren!] (find-layouts b)
             | skip
         ]]
     ]
+    ; the styles and rules the file defines, as check reads them, then its layouts with them
+    before: reduce [copy ui-style-defs  copy styles]
+    run-own values 'rule
+    run-own values 'stylize
     find-layouts values
+    ; what the file defines anew stays known; a style it redefines is its own, kept in the design,
+    ; and the one before comes back, so the designer's own screen never changes (rule cannot
+    ; redefine one of Trebol's)
+    d/defs: make map! []
+    d/own: collect [foreach [k v] styles [unless same? v select before/2 k [keep k]]]
+    foreach [m old] reduce [ui-style-defs before/1  styles before/2] [
+        foreach k keys-of old [
+            unless same? select m k select old k [
+                if same? m ui-style-defs [put d/defs k select m k]
+                put m k select old k
+            ]
+        ]
+    ]
     d
+]
+
+; Runs the rule or stylize blocks of a file's code, and those inside its blocks; one that fails is left out.
+run-own: function [code [block! paren!] kind [word!] /local b n m] [
+    parse code [any [
+        'stylize set b block! (if kind = 'stylize [attempt [stylize copy/deep b]])
+        | 'rule set n lit-word! set m [string! | map! | block!] set b block! (if kind = 'rule [attempt [rule to word! n m copy/deep b]])
+        | set b [block! | paren!] (run-own b kind)
+        | skip
+    ]]
 ]
 
 spot-of: function [

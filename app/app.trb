@@ -89,6 +89,8 @@ change-text: function [t [string!]] [
     ] [
         set 'problem none
         set 'd e
+        ; the Add menu has the styles the file defines too
+        add-button/menu: get in first layout/only compose/only [button menu (palette-menu/own d/own)] 'menu
     ]
     redraw
 ]

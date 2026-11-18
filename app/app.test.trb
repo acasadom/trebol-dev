@@ -9,11 +9,18 @@ view [
     field name "Name"  ; theirs
 ]
 }
+    "notes.trb" {Trebol [title: "Notes"]
+
+stylize [note: text [role: 'muted]]
+view [
+    heading "Notes"
+]
+}
 )
 written: none
 
 serve [
-    GET "/api/files" [#(name: "shop" files: ["app.trb"])]
+    GET "/api/files" [#(name: "shop" files: ["app.trb" "notes.trb"])]
     GET "/api/file" [select disk query/path]
     PUT "/api/file" [written: body  "Saved."]
 ]
@@ -100,4 +107,13 @@ serve [
     see {greeting: heading "Join us"}
     click "global"
     see {global greeting: heading "Join us"}
+]
+
+"a style the file defines"
+[
+    choose "File" "notes.trb"
+    click {heading "Notes"}
+    pick-menu "Add" ["This file" "note"]
+    click "Save"
+    not none? find written {heading "Notes"^/    note^/]}
 ]

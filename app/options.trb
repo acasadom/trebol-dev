@@ -25,7 +25,8 @@ part: make object! [
 ]
 
 style-def-of: function ["The definition of the style a face was written with" d [object!] f [object!]] [
-    any [select ui-style-defs style-word d f  select ui-style-defs f/style]
+    w: style-word d f
+    any [select d/defs w  select ui-style-defs w  select ui-style-defs f/style]
 ]
 
 ; the words that start an entry of a definition, and the words of its one-of lists

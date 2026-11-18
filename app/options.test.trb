@@ -112,3 +112,20 @@ edit-first: func [t fn [any-function!] args [block!]] [
 [{view [button "Go" [stop]]} = edit-first {view [button "Go" [go]]} :set-action [[stop]]]
 [{view [button "Go"]} = edit-first {view [button "Go" [go]]} :set-action reduce [none]]
 [{view [panel [text "a"] [go]]} = edit-first {view [panel [text "a"]]} :set-action [[go]]]
+
+"the styles and rules a file defines are known, and Trebol's own come back"
+[
+    d: design-of {stylize [note: text [takes: [role: 'loud]]]  view [note "a" loud]}
+    all [[style text entry] = collect [foreach p face-parts d first faces-of d [keep p/what]]  to logic! select ui-style-defs 'note]
+]
+[
+    d: design-of {rule 'even "Even" [even? value]  view [field n "N" even]}
+    [style name text entry] = collect [foreach p face-parts d first faces-of d [keep p/what]]
+]
+[
+    d: design-of {stylize [view: view [caption: none  takes: [caption: 'caption text]]]  view [caption "C" text "a"]}
+    all [
+        [entry] = collect [foreach p face-parts d first shown-faces d [keep p/what]]
+        none? find words-of select styles 'view 'caption
+    ]
+]
