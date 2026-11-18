@@ -334,6 +334,12 @@ after-line: function [
     either any [blank? tail-text  #";" = first trim/head copy tail-text] [n + length? tail-text] [n]
 ]
 
+more-on-line?: function ["Whether more than spaces or a comment follows an index on its line" text [string!] n [integer!]] [
+    rest: find at text n newline
+    tail-text: copy/part at text n either rest [(index? rest) - n] [length? at text n]
+    not any [blank? tail-text  #";" = first trim/head copy tail-text]
+]
+
 replace-value: function [
     "The text with the value at an index of a loaded block written anew"
     d [object!] b [block! paren!] n [integer!] new [any-type!]
@@ -383,7 +389,10 @@ insert-after: function [
 ] [
     s: face-span d f
     indent: indent-at d/text s/x
-    splice d/text after-line d/text s/x + s/y 0 rejoin [newline indent indented code indent]
+    n: after-line d/text s/x + s/y
+    ; more is written after it on its line, as in row [a  b]: beside it, as the line is written
+    if all [more-on-line? d/text s/x + s/y  not find code newline] [return splice d/text n 0 rejoin ["  " code]]
+    splice d/text n 0 rejoin [newline indent indented code indent]
 ]
 
 insert-into: function [
@@ -402,7 +411,16 @@ insert-into: function [
     ]
     last-span: span-of d b length? b
     indent: indent-at d/text last-span/x
-    splice d/text after-line d/text last-span/x + last-span/y 0 rejoin [newline indent indented code indent]
+    n: after-line d/text last-span/x + last-span/y
+    ; a block on one line, [field "a"]: the new code goes beside the last value; code of more lines than
+    ; one opens the block onto lines, its ] under the line it opens on
+    if more-on-line? d/text last-span/x + last-span/y [
+        unless find code newline [return splice d/text n 0 rejoin ["  " code]]
+        outer: indent-at d/text owner/x
+        inner: rejoin [outer "    "]
+        return splice d/text n 0 rejoin [newline inner indented code inner newline outer]
+    ]
+    splice d/text n 0 rejoin [newline indent indented code indent]
 ]
 
 move-face: function [

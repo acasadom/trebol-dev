@@ -52,6 +52,13 @@ import %sample.trb
     {view [^/    panel "P" [^/        grid 2 [^/            text "L"^/        ]^/    ]^/]} = insert-into d b {grid 2 [^/    text "L"^/]}]
 [d: design-of sample  b: pick d/layouts/1/block 12  t: insert-into d b {button "Help"}
     not none? find t {button "Back"^/        button "Help"^/    ]}]
+; a block on one line keeps to its line; code of more lines opens it onto lines
+[d: design-of {view [^/    row [text "a"]^/]}  b: pick d/layouts/1/block 2
+    {view [^/    row [text "a"  text "b"]^/]} = insert-into d b {text "b"}]
+[d: design-of {view [^/    row [text "a"]^/]}  b: pick d/layouts/1/block 2
+    {view [^/    row [text "a"^/        grid 2 [^/            text "L"^/        ]^/    ]^/]} = insert-into d b {grid 2 [^/    text "L"^/]}]
+[d: design-of {view [^/    row [text "a"  text "c"]^/]}
+    {view [^/    row [text "a"  text "b"  text "c"]^/]} = insert-after d second faces-of d {text "b"}]
 
 "moving"
 [d: design-of sample  fs: faces-of d  t: move-face d first fs third fs
