@@ -195,6 +195,20 @@ props-code: function [
         if q/what = 'text [t: pick r/1 q/from]
         if q/what = 'hint [h: pick r/1 q/from]
     ]
+    ; the word code names it with: who: field, global for every script
+    if all [not view?  any [empty? query  find "label global word" query]] [
+        l: face-label d f
+        g: 'global = pick r/1 r/2
+        append code compose/deep [
+            divider text small muted "Label" column gap 2 [
+                row middle [
+                    field "label" "word" fill with [value: (either l [form l] [""])] on-change [(act) 0 'label value]
+                    check "global" with [value: (g)] on-change [(act) 0 'global value]
+                ]
+                text small muted "the word code names it with: who: field; global, for every script"
+            ]
+        ]
+    ]
     if all [not view?  any [empty? query  find "text hint" query]] [
         append code compose/deep [
             divider text small muted "Text" column gap 2 [

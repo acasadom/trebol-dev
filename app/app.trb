@@ -202,7 +202,7 @@ prop-act: function [k [integer!] what [word!] value] [
     unless f: the-face [exit]
     e: all [g  first g]
     ; typing goes on in the control: the panel is laid out again only for a choice or a removal
-    if find [values code text hint is calc react event action] what [set 'keep-props true]
+    if find [values code text hint is calc react event action label] what [set 'keep-props true]
     ; a picked icon shows in the panel: laid out again
     t: switch what [
         flag [either value [set-option d f e none] [remove-option d f e]]
@@ -234,6 +234,15 @@ prop-act: function [k [integer!] what [word!] value] [
             b: attempt [load value]
             set-reaction d f what either all [block? b  not empty? b] [b] [none]
         ]
+        label [
+            w: all [string? value  not empty? trim copy value  attempt [load value]]
+            case [
+                none? w [set-face-label d f none]
+                word? w [set-face-label d f w]
+                true [none]
+            ]
+        ]
+        global [set-face-global d f value]
         action [
             b: all [string? value  not empty? trim copy value  attempt [load value]]
             set-action d f either all [block? b  not empty? b] [b] [none]

@@ -94,3 +94,10 @@ serve [
     click "Save"
     not none? find written {view [^/    width fill^/    heading "Join us"}
 ]
+[
+    click {heading "Join us"}
+    type "label" "greeting"
+    see {greeting: heading "Join us"}
+    click "global"
+    see {global greeting: heading "Join us"}
+]

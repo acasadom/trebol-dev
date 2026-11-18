@@ -5,6 +5,7 @@ Trebol [
         splice cut replace-value remove-face insert-after insert-into move-face
         set-face-text set-face-name face-label style-word toggle-flag
         layout-of head-end block-span indent-at shown-faces
+        set-face-label set-face-global
     ]
 ]
 
@@ -391,6 +392,44 @@ face-label: function ["The word a face is set to, sign-up: panel, or none" d [ob
     v: pick r/1 r/2
     if all [word? :v  'global = v] [v: pick r/1 r/2 + 1]
     either set-word? :v [to word! v] [none]
+]
+
+set-face-label: function [
+    "The text with the word a face is set to (who: field) changed, added before its style, or, none, taken out with global"
+    d [object!] f [object!] new [word! none!]
+] [
+    r: face-range d f
+    n: style-index d f
+    had: either set-word? pick r/1 n - 1 [n - 1] [none]
+    case [
+        all [had new] [replace-value d r/1 had to set-word! new]
+        had [
+            a: span-of d r/1 r/2  z: span-of d r/1 had
+            s: as-pair a/x z/x + z/y - a/x
+            ; and the space after it
+            if #" " = pick d/text s/x + s/y [s/y: s/y + 1]
+            splice d/text s/x s/y ""
+        ]
+        new [s: span-of d r/1 n  splice d/text s/x 0 rejoin [new ": "]]
+        true [d/text]
+    ]
+]
+
+set-face-global: function [
+    "The text with a face's word set globally (global who: field), or locally"
+    d [object!] f [object!] on [logic!]
+] [
+    r: face-range d f
+    was: 'global = pick r/1 r/2
+    case [
+        all [on  not was] [s: span-of d r/1 r/2  splice d/text s/x 0 "global "]
+        all [was  not on] [
+            s: span-of d r/1 r/2
+            if #" " = pick d/text s/x + s/y [s/y: s/y + 1]
+            splice d/text s/x s/y ""
+        ]
+        true [d/text]
+    ]
 ]
 
 set-face-name: function [

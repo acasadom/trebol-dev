@@ -75,3 +75,6 @@ sketch-ok?: function [b [block!]] [
 "what a face does when clicked is among its events"
 [p: panels-of {button "Go" [go]} ""  all [has? p/3 "action"  has? p/3 "[go]"]]
 [d: design-of {view [text "a"]}  not has? events-code d first shown-faces d "" 'act "action"]
+"the word a face is set to, and global"
+[p: panels-of {who: text "a"} ""  all [has? p/1 "label"  has? p/1 {"who"}  has? p/1 "global"]]
+[d: design-of {view [text "a"]}  not has? first props-code d first shown-faces d "" 'act "global"]

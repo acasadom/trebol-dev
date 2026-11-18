@@ -95,3 +95,9 @@ import %sample.trb
 [d: design-of {view [form [submit "Go"]]}  f: second faces-of d  all ['button = f/style  'submit = style-word d f]]
 [d: design-of {view [form [submit "Go"]]}  {view [form [submit "Send"]]} = set-face-text d second faces-of d "Send"]
 [d: design-of {view [global x: text "a"]}  'text = style-word d first faces-of d]
+"the word a face is set to"
+[d: design-of {view [text "a"]}  {view [who: text "a"]} = set-face-label d first faces-of d 'who]
+[d: design-of {view [who: text "a"]}  {view [me: text "a"]} = set-face-label d first faces-of d 'me]
+[d: design-of {view [global who: text "a"]}  {view [text "a"]} = set-face-label d first faces-of d none]
+[d: design-of {view [who: text "a"]}  {view [global who: text "a"]} = set-face-global d first faces-of d true]
+[d: design-of {view [global who: text "a"]}  {view [who: text "a"]} = set-face-global d first faces-of d false]
