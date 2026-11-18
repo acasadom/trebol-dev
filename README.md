@@ -11,8 +11,9 @@ npx trebol-dev my-app     # or in another one
 
 It opens on <http://localhost:5180/> (`--port` picks another). Only this machine reaches it.
 
-New to it? The [manual](docs/manual/README.md) walks through a small project, from an empty view to an app
-with screens, tabs and styles of its own.
+New to it? [Design with the mouse](https://trebol-lang.com/docs/designer/01-the-window.html), the third tutorial of
+Trebol's documentation, builds the screens of a small shop with it, page by page. Its pages are written here, in
+`docs/designer/`, and Trebol's documentation takes them from here when it is built.
 
 ## What it does
 
