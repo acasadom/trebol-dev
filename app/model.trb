@@ -2,7 +2,7 @@ Trebol [
     title: "The design of a file: its text, its values and faces, and the edits that change the text"
     exports: [
         design-of spot-of span-of face-range face-span face-code faces-of
-        splice replace-value remove-face insert-after insert-into move-face
+        splice cut replace-value remove-face insert-after insert-into move-face
         set-face-text set-face-name face-label style-word toggle-flag
     ]
 ]
