@@ -129,3 +129,5 @@ import %sample.trb
     {view [^/    screens [^/        home "Home" [text "a"]^/        screen-1 "Screen 1" []^/    ]^/]} = add-screen d first faces-of d
 ]
 [d: design-of {view [screens [home "Home" [text "a"] b "B" []]]}  {view [screens [b "B" []]]} = remove-face d second faces-of d]
+"the faces of a row of rows"
+[d: design-of {view [rows items [field name "Name" check ok "Done"]]}  [rows field check] = collect [foreach f faces-of d [keep f/style]]]

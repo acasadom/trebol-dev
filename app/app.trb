@@ -327,6 +327,13 @@ prop-values: function [f g [block!] value [string!]] [
 ; the loaded block that holds a box's faces
 pane-block: function [f] [
     if b: own-block d f [return b]
+    ; rows: the faces of one row, its template
+    if f/style = 'rows [
+        r: face-range d f
+        foreach p face-parts d f [
+            if all [p/what = 'block  p/e/field = first [template:]] [return pick r/1 p/from]
+        ]
+    ]
     unless all [find boxes f/style  r: face-range d f] [return none]
     b: pick r/1 r/3
     either block? b [b] [none]

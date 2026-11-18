@@ -18,6 +18,9 @@ view [
         ]
         about "About" [
             text "Who we are"
+            rows items [
+                field name "Name"
+            ]
         ]
     ]
 ]
@@ -143,5 +146,13 @@ serve [
     see {screen about "About us"}
     click "Add a screen"
     click "Save"
-    not none? find written {about "About us" [^/            text "Who we are"^/        ]^/        screen-1 "Screen 1" []}
+    not none? find written {about "About us" [^/            text "Who we are"}
+    not none? find written {^/        ]^/        screen-1 "Screen 1" []^/    ]}
+]
+[
+    choose "File" "pages.trb"
+    click {rows items}
+    pick-menu "Add" ["Choice" "Checkbox"]
+    click "Save"
+    not none? find written {field name "Name"^/                check "Checkbox"^/            ]}
 ]
