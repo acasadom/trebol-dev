@@ -70,7 +70,9 @@ pick-machine: function ["Chooses what a row of the machines' structure is" id [s
     what: select [#"m" machine #"s" state #"w" way] first id
     parts: split next id #"."
     set 'picked reduce [to integer! parts/1 to integer! parts/2 what]
+    machine-tree/selected: machine-node-of id machine-tree/data
     mark-machine
+    draw-machine
     fill-mprops
 ]
 
@@ -83,6 +85,7 @@ redraw-machines: function [] [
     machine-none/hidden: not empty? ms
     if editing = "Machines" [
         mark-machine
+        draw-machine
         either keep-mprops [set 'keep-mprops false] [fill-mprops]
     ]
 ]
@@ -93,6 +96,64 @@ machine-node-of: function [id list [block!]] [
         if n/children [if found: machine-node-of id n/children [return found]]
     ]
     none
+]
+
+; --- the drawing ---------------------------------------------------------------------------------
+
+graph-data: function ["What the drawing of the k-th machine is given: its nodes and ways, by the structure's ids" k [integer!]] [
+    m: pick ms k
+    nodes: collect [
+        foreach n m/nodes [
+            p: all [n/parent  machine-node m n/parent]
+            keep make map! reduce [
+                'id rejoin [either n/id = 1 ["m"] ["s"] k "." n/id]
+                'name form n/name
+                'kind form n/kind
+                'parent either p [rejoin [either p/id = 1 ["m"] ["s"] k "." p/id]] [none]
+                'initial to logic! all [p  p/initial = n/name]
+            ]
+        ]
+    ]
+    ways: collect [
+        foreach w m/ways [
+            if src: way-source m w [
+                keep make map! reduce [
+                    'id rejoin ["w" k "." w/id]
+                    'from rejoin ["s" k "." src]
+                    'to collect [foreach t way-targets m w [if t [keep rejoin ["s" k "." t]]]]
+                    'label way-label w
+                ]
+            ]
+        ]
+    ]
+    make map! reduce ['name either m/name [form m/name] [none] 'nodes nodes 'ways ways]
+]
+
+; the chosen machine, or the first; none when the file makes none
+draw-machine: function [] [
+    k: either picked [picked/1] [1]
+    machine-drawing/props: make machine-drawing/props [
+        graph: either pick ms k [graph-data k] [none]
+        selected: either picked [tree-id picked] [none]
+    ]
+]
+
+; a drag in the drawing from one state onto another: a new way between them, chosen
+machine-connect: function [ids [block!]] [
+    a: split next first ids #"."
+    b: split next second ids #"."
+    k: to integer! a/1
+    if k <> to integer! b/1 [exit]
+    unless m: pick ms k [exit]
+    from: to integer! a/2
+    to-id: to integer! b/2
+    unless t: add-way d m from to-id 'go [exit]
+    edit t
+    ; the way is the last one of its level that leaves from there to there
+    foreach w select pick ms k 'ways [
+        if all [from = way-source pick ms k w  find way-targets pick ms k w to-id] [set 'picked reduce [k w/id 'way]]
+    ]
+    redraw
 ]
 
 ; what is chosen, marked in the code
@@ -128,6 +189,7 @@ machine-caret: function [at [integer!]] [
         set 'picked copy/part best 3
         machine-tree/selected: machine-node-of tree-id picked machine-tree/data
         mark-machine
+        draw-machine
         fill-mprops
     ]
 ]

@@ -166,3 +166,51 @@ machines: does [choose "File" "repair.trb"  choose "Edit" "Machines"]
     s: code-view/props/mark
     all [block? s  "state work [" = copy/part at text s/1 12]
 ]
+
+"the drawing"
+[
+    ; it is given the chosen machine: its states, nested, the initial ones, and its ways labelled
+    machines
+    g: machine-drawing/props/graph
+    ids: collect [foreach n g/nodes [keep n/id]]
+    work: none
+    foreach n g/nodes [if n/name = "checking" [work: n]]
+    way: none
+    foreach w g/ways [if w/label = "fixable" [way: w]]
+    to logic! all [
+        g/name = "repair"
+        ids = ["m1.1" "s1.2" "s1.3" "s1.4" "s1.5" "s1.6"]
+        work/parent = "s1.3"
+        work/initial
+        way/from = "s1.4"
+        way/to = ["s1.5"]
+    ]
+]
+[
+    ; a click on a state in the drawing chooses it, as the structure does
+    machines
+    pick-machine "s1.3"
+    all [
+        machine-drawing/props/selected = "s1.3"
+        not machine-props/hidden
+        to logic! find form machine-tree/selected/name "state work"
+    ]
+]
+[
+    ; a drag from a state onto another: a new way, chosen
+    machines
+    machine-connect ["s1.2" "s1.6"]
+    see "to ready on go"
+    click "Save"
+    all [
+        to logic! find written "from received to ready on go"
+        picked/3 = 'way
+        machine-drawing/props/selected = rejoin ["w1." picked/2]
+    ]
+]
+[
+    ; states of two machines: no way between them
+    machines
+    machine-connect ["s1.2" "s2.2"]
+    see/not "on go"
+]
