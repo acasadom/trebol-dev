@@ -1,6 +1,7 @@
 Trebol [
     title: "Trebol designer"
     description: "Lays out the screens of a Trebol project and writes the code back, as you wrote it."
+    icon: %favicon.svg
 ]
 
 ; The designer of a project's screens. The file's text is the truth: every change, made on the

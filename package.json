@@ -1,6 +1,6 @@
 {
   "name": "trebol-dev",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "The visual designer for Trebol: lays out screens with Trebol's faces and writes the Trebol code back, keeping yours as you wrote it.",
   "license": "Apache-2.0",
   "type": "module",
@@ -37,7 +37,7 @@
     "build:editor": "esbuild editor/trebol-code.js --bundle --minify --format=esm --target=es2022 --legal-comments=eof --outfile=app/trebol-code.js"
   },
   "dependencies": {
-    "trebol": "^0.3.0"
+    "trebol": "^0.3.1"
   },
   "devDependencies": {
     "@codemirror/commands": "^6.11.1",
