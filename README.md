@@ -21,8 +21,9 @@ The window holds it all, with no page scroll: the structure on the left, the pro
 the middle the preview, the code, or both side by side (*Design*, *Split*, *Code*). Each part scrolls by itself.
 
 - **Files**: every `.trb` file of the project, outside `node_modules` and hidden folders.
-- **Structure**: the faces of each `view` and `layout` in the file, nested as written. Drag a face among the
-  ones beside it to move it; *Up* and *Down* do the same. *Add* has every style of Trebol, in groups
+- **Structure**: the faces of each `view` and `layout` in the file, nested as written, with its screens, tabs,
+  steps and the template of its rows. Drag a face anywhere to move it, into another box too; *Up* and *Down*
+  move it past the face beside it, into the box beside it and out of its own. *Add* has every style of Trebol, in groups
   (layout, text, input, choice, data, action, media): what it adds goes inside the chosen face when that face
   holds others (a panel, a row, a grid...), and after it otherwise; the face added is the one chosen next.
 - **Preview**: the screen as it looks, laid out without running any of the program's code. Click a face to
@@ -33,9 +34,10 @@ the middle the preview, the code, or both side by side (*Design*, *Split*, *Code
 - **Properties**: the text a face shows, the name of a field, whether it is required, the columns of a grid
   (`3`, a weight for each as `1 2 1`, or `small 1` for a fixed side column); *Delete* takes it out.
 
-A face chosen in one of them is chosen in all three.
+A face chosen in one of them is chosen in all three. Drag the space between two columns to make one wider.
 
-*Save* writes the file. Leaving a file with changes asks first.
+*Undo* and *Redo* take back any change and bring it back, made with the mouse, in the properties or in the
+code (Ctrl+Z, Ctrl+Shift+Z, Ctrl+Y). *Save* writes the file. Leaving a file with changes asks first.
 
 ## How it keeps your code
 
