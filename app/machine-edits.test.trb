@@ -1,0 +1,94 @@
+Trebol [
+    title: "The edits of a machine: the text each gives, and that the machine it writes is still one"
+    app: none
+]
+
+import %model.trb
+import %machines.trb
+import %machine-edits.trb
+import %machine-sample.trb
+
+; the machine the new text makes, made: an error when the edit broke it
+made?: function [t [string!]] [not error? try [machine third load t]]
+; one with a state no way leads to yet loads, but is not a machine until a way does
+loads?: function [t [string!]] [not error? try [load t]]
+d: design-of machine-sample
+m: first machines-of d
+
+"adding states"
+[t: add-state d m 1 'paid 'state  to logic! all [loads? t  find t {final ready done^/    state paid []^/    from received}]]
+[t: add-state d m 3 'fixing 'state  to logic! all [loads? t  find t {state waiting [on-enter [print "parts ordered"]]^/        state fixing []^/        from checking}]]
+[t: add-state d m 2 'inner 'state  to logic! all [made? t  find t {state received [^/        initial inner^/        state inner []^/    ]   ; at the door}]]
+[t: add-state d m 1 'gone 'final  to logic! all [loads? t  not find t {state paid}  find t {final ready done^/    final gone^/}]]
+[none? add-state d m 6 'x 'state]
+[none? add-state d m 1 'work 'state]
+[d2: design-of "machine [initial a state a []]"  t: add-state d2 first machines-of d2 1 'b 'state
+    t = "machine [initial a state a []  state b []]"]
+[d2: design-of "machine []"  t: add-state d2 first machines-of d2 1 'a 'state
+    t = "machine [^/    initial a^/    state a []^/]"]
+[d2: design-of "m: machine [initial a  state a []  from a to a on x]"
+    t: add-state d2 first machines-of d2 1 'b 'state
+    t = "m: machine [initial a  state a []  state b []  from a to a on x]"]
+
+"renaming states"
+[t: rename-state d m 3 'job  to logic! all [made? t  find t "state job ["  find t "from received to job on start"  find t "from job to ready"]]
+[t: rename-state d m 6 'finished  to logic! all [made? t  find t "to finished  else"  find t "final finished done"  find t "from work to finished"]]
+[t: rename-state d m 4 'looking  to logic! all [made? t  find t "initial looking"  find t "state looking []"  find t "from looking to waiting"  find t "else to looking"]]
+[none? rename-state d m 4 'waiting]
+[none? rename-state d m 4 'state]
+[d2: design-of "machine [initial a  state a [initial b state b []]  state c []  from c to a/b on x]"
+    t: rename-state d2 first machines-of d2 3 'bee
+    t = "machine [initial a  state a [initial bee state bee []]  state c []  from c to a/bee on x]"]
+[d2: design-of "machine [initial a  state a [initial b state b []]  state c []  from c to a/b on x]"
+    t: rename-state d2 first machines-of d2 2 'ay
+    t = "machine [initial ay  state ay [initial b state b []]  state c []  from c to ay/b on x]"]
+
+"deleting states"
+[t: delete-state d m 5  to logic! all [made? t  not find t "waiting"  find t "state checking []^/    ]"]]
+[t: delete-state d m 2  to logic! all [made? t  not find t "received"  find t "initial work"  find t "from work to ready"]]
+[t: delete-state d m 6  to logic! all [made? t  not find t "ready"  find t "choose [else to checking]"]]
+[none? delete-state d m 1]
+[d2: design-of "machine [initial a  state a []]"  t: delete-state d2 first machines-of d2 2  t = "machine []"]
+
+"the initial state"
+[t: set-initial d m 3  to logic! all [loads? t  find t "initial work^/"]]
+[d2: design-of "machine [state a []]"  t: set-initial d2 first machines-of d2 2  t = "machine [initial a  state a []]"]
+[d2: design-of "machine [initial p  parallel p [state a [] state b []]]"  none? set-initial d2 first machines-of d2 3]
+
+"adding and deleting ways"
+[t: add-way d m 2 6 'skip  to logic! all [made? t  find t "from work to ready on fixed^/    from received to ready on skip^/]"]]
+[t: add-way d m 5 2 none  to logic! all [made? t  find t "else to checking]^/        from waiting to received^/    ]"]]
+[t: add-way d m 2 5 'early  to logic! all [made? t  find t "from received to work/waiting on early"]]
+[none? add-way d m 1 2 'x]
+[d2: design-of "machine [initial p  parallel p [state a [] state b []]]"  none? add-way d2 first machines-of d2 3 4 'x]
+[t: delete-way d m third m/ways  to logic! all [loads? t  not find t "on start"]]
+
+"events of a way"
+[t: set-way-events d m third m/ways [go begin]  to logic! all [made? t  find t "from received to work on [go begin]^/"]]
+[t: set-way-events d m third m/ways [begin]  to logic! all [made? t  find t "from received to work on begin^/"]]
+[t: set-way-events d m first m/ways []  to logic! all [made? t  find t "from checking to waiting set [parts: event/count]"]]
+[t: set-way-events d m second m/ways [check]  to logic! all [made? t  find t "from waiting choose on check [when"]]
+[d2: design-of "machine [initial a  state a []  state b []  from a to b on x where [true]]"
+    t: set-way-events d2 first machines-of d2 first select first machines-of d2 'ways []
+    t = "machine [initial a  state a []  state b []  from a to b]"]
+
+"where a way goes, and its code"
+[t: set-way-target d m third m/ways 6  to logic! all [loads? t  find t "from received to ready on start"]]
+[none? set-way-target d m second m/ways 2]
+[t: set-way-code d m third m/ways 'where "event/ok"  to logic! all [made? t  find t "on start where [event/ok]^/"]]
+[t: set-way-code d m third m/ways 'set "parts: 1"  to logic! all [made? t  find t "on start set [parts: 1]^/"]]
+[t: set-way-code d m first m/ways 'set ""  to logic! all [made? t  find t "on need-parts^/"]]
+[t: set-way-code d m first m/ways 'set "parts: 9"  to logic! find t "set [parts: 9]"]
+["parts: event/count" = way-code d first m/ways 'set]
+[none? way-code d first m/ways 'where]
+
+"a state's own words"
+[{print "parts ordered"} = state-word-value d m 5 'on-enter]
+[none? state-word-value d m 5 'on-exit]
+[t: set-state-word d m 5 'on-enter {print "hi"}  to logic! all [made? t  find t {state waiting [on-enter [print "hi"]]}]]
+[t: set-state-word d m 5 'on-enter ""  to logic! all [made? t  find t "state waiting []^/"]]
+[t: set-state-word d m 2 'on-enter {print "hi"}  to logic! all [made? t  find t {state received [^/        on-enter [print "hi"]^/    ]}]]
+[t: set-state-word d m 3 'no "history"  to logic! all [made? t  find t "initial checking^/        no history^/"]]
+[t: set-state-word d m 4 'timeout "0:15"  to logic! find t "state checking [^/            timeout 0:15^/        ]"]
+[t: set-state-word d m 5 'on-exit "beep"  to logic! find t {[on-enter [print "parts ordered"]  on-exit [beep]]}]
+[t: set-state-word d m 1 'data "parts: 2"  to logic! all [made? t  find t "data [parts: 2]"]]

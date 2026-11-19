@@ -1,0 +1,50 @@
+Trebol [
+    title: "The machines of a file: reading their states and ways from the text"
+    app: none
+]
+
+import %model.trb
+import %machines.trb
+import %machine-sample.trb
+
+"finding machines"
+[d: design-of machine-sample  1 = length? machines-of d]
+[d: design-of machine-sample  'repair = select first machines-of d 'name]
+[d: design-of "x: 1"  empty? machines-of d]
+[d: design-of {view [button [m: machine [initial a state a []]]]}  1 = length? machines-of d]
+[d: design-of {machine [initial a state a []]  machine [initial b state b []]}  2 = length? machines-of d]
+
+"states"
+[m: first machines-of design-of machine-sample
+    [repair received work checking waiting ready] = collect [foreach n m/nodes [keep n/name]]]
+[m: first machines-of design-of machine-sample
+    [machine state state state state final] = collect [foreach n m/nodes [keep n/kind]]]
+[m: first machines-of design-of machine-sample  'received = select machine-root m 'initial]
+[m: first machines-of design-of machine-sample  'checking = select machine-node m 3 'initial]
+[m: first machines-of design-of machine-sample  [checking waiting] = collect [foreach n machine-children m 3 [keep n/name]]]
+[m: first machines-of design-of machine-sample  3 = select machine-node m 4 'parent]
+[m: first machines-of design-of machine-sample  n: machine-node m 6  'done = pick n/holder n/outcome]
+[m: first machines-of design-of machine-sample  n: machine-node m 5  [on-enter 1] = n/words]
+[m: first machines-of design-of machine-sample  [work waiting] = machine-path m 5]
+[m: first machines-of design-of {machine [initial a state a [] fiddle state b]}  [6] = select machine-root m 'strays]
+
+"looking states up"
+[m: first machines-of design-of machine-sample  5 = find-machine-state m 3 'waiting]
+[m: first machines-of design-of machine-sample  6 = find-machine-state m 3 'ready]
+[m: first machines-of design-of machine-sample  5 = find-machine-state m 1 'work/waiting]
+[m: first machines-of design-of machine-sample  none? find-machine-state m 1 'waiting]
+[m: first machines-of design-of machine-sample  inside-state? m 5 3]
+[m: first machines-of design-of machine-sample  not inside-state? m 3 5]
+[m: first machines-of design-of machine-sample  'received-2 = fresh-state-name m 'received]
+[m: first machines-of design-of machine-sample  'fresh = fresh-state-name m 'fresh]
+
+"ways"
+[m: first machines-of design-of machine-sample  4 = length? m/ways]
+[m: first machines-of design-of machine-sample  w: first m/ways
+    all [w/level = 3  w/source = 'checking  w/kind = 'to  w/events = [need-parts]  w/set-at  [5] = way-targets m w]]
+[m: first machines-of design-of machine-sample  w: second m/ways
+    all [w/kind = 'choose  [6 4] = way-targets m w  "choose" = way-label w  2 = ((length? w/choices) / 3)]]
+[m: first machines-of design-of machine-sample  w: third m/ways
+    all [w/level = 1  2 = way-source m w  [3] = way-targets m w  "start" = way-label w]]
+[m: first machines-of design-of {machine [initial a state a [] state b [] from a to b on [x y] where [true]]}
+    "x y [where]" = way-label first m/ways]

@@ -1,0 +1,22 @@
+Trebol [
+    title: "A file with a machine, as the machine tests read and change it"
+    exports: [machine-sample]
+]
+
+machine-sample: {repair: machine [
+    data [parts: 0]
+    initial received
+    state received []   ; at the door
+    state work [
+        initial checking
+        state checking []
+        state waiting [on-enter [print "parts ordered"]]
+        from checking to waiting on need-parts set [parts: event/count]
+        from waiting choose [when [data/parts > 2] to ready  else to checking]
+    ]
+    final ready done
+    from received to work on start
+    from work to ready on fixed
+]
+send repair 'start
+}
