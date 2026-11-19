@@ -13,6 +13,7 @@ import %palette.trb
 import %options.trb
 import %props.trb
 import %samples.trb
+import %history.trb
 import %trebol-code.js
 
 ; the styles whose block holds faces: what is added with one of them chosen goes inside it
@@ -30,6 +31,8 @@ demo-saved: none    ; and each as last downloaded
 prop-entries: []    ; the options the properties show, by the index their controls name
 props-query: ""     ; what the properties are narrowed to
 keep-props: false   ; a property being typed in: the panel stays, so the typing goes on
+histories: make map! []   ; each file's undo and redo, by its path: kept when another file is opened
+hist: none          ; the history of the file being designed
 
 ; the file API answers only the designer's own pages, which say so with this header
 api-get: func [url] [fetch/with url [headers: [X-Trebol-Dev "1"]]]
@@ -58,10 +61,14 @@ open-file: function [name [string!]] [
                 file-choice/value: path
                 exit
             ]
+            ; its changes are left: so is what undoes them
+            put histories path new-history
         ]
     ]
     set 'path name
     file-choice/value: name
+    unless select histories name [put histories name new-history]
+    set 'hist select histories name
     t: either demo [select demo name] [api-get rejoin ["/api/file?path=" enhex name]]
     set 'saved either demo [select demo-saved name] [t]
     set 'chosen none
@@ -104,7 +111,31 @@ change-text: function [t [string!]] [
     redraw
 ]
 
-edit: function [t [string! none!]] [if t [change-text t]]
+; A change the person made: it can be undone. Opening a file, undo and redo change the text without one.
+write-text: function [t [string!]] [
+    if hist [remember hist text t]
+    change-text t
+]
+
+edit: function [t [string! none!]] [if t [write-text t]]
+
+undo-change: function [] [if all [hist  t: undo-text hist text] [change-text t]]
+redo-change: function [] [if all [hist  t: redo-text hist text] [change-text t]]
+
+; Ctrl+Z in the code: what was typed there and not yet read is a change first
+code-undo: function [typed what [word!]] [
+    if all [string? typed  typed <> text] [write-text typed]
+    either what = 'undo [undo-change] [redo-change]
+]
+
+; Ctrl+Z and Ctrl+Shift+Z or Ctrl+Y (Cmd on a Mac), unless pressed where the person types: a box undoes its own
+undo-key: function [e] [
+    if any [e/typing?  e/alt?  not any [e/ctrl?  e/meta?]] [exit]
+    case [
+        any [e/key = #"y"  all [e/key = #"z"  e/shift?]] [redo-change]
+        e/key = #"z" [undo-change]
+    ]
+]
 
 the-face: does [all [d chosen  pick shown-faces d chosen]]
 
@@ -160,6 +191,8 @@ redraw: function [] [
         true ["Changed"]
     ]
     save-button/disabled: any [problem  text = saved  not path]
+    undo-button/disabled: not can-undo? hist
+    redo-button/disabled: not can-redo? hist
     code-view/value: text
     problem-text/hidden: not problem
     problem-text/text: any [problem ""]
@@ -249,7 +282,7 @@ prop-act: function [k [integer!] what [word!] value] [
             either e/how = 'custom [
                 ; every rule of a program the face has goes
                 foreach w custom-rule-words [
-                    if option-of/rule face-parts d f e w [change-text remove-option/rule d f e w  f: the-face]
+                    if option-of/rule face-parts d f e w [write-text remove-option/rule d f e w  f: the-face]
                 ]
                 none
             ] [
@@ -501,6 +534,7 @@ add-face: function [item [word!]] [
 ; the Add menu comes from the palette
 view compose/deep/only [
     width fill
+    on-key [undo-key event]
     row spread middle [
         row middle [
             title "Trebol designer"
@@ -510,6 +544,8 @@ view compose/deep/only [
         global mode-f: radio mode "View" ["Design" "Split" "Code"] segmented on-change [show-mode value]
         row middle [
             global file-state: text muted ""
+            global undo-button: button #undo "Undo" disabled [undo-change]
+            global redo-button: button #redo "Redo" disabled [redo-change]
             global save-button: button #check "Save" primary [save-file]
         ]
     ]
@@ -532,8 +568,8 @@ view compose/deep/only [
             ]
             global code-pane: panel "Code" pad 2 [
                 global problem-text: text danger hidden ""
-                global code-view: widget <trebol-code> fit [words: code-words mark: none] on-change [change-text value]
-                    on-caret [caret-at event/detail]
+                global code-view: widget <trebol-code> fit [words: code-words mark: none] on-change [write-text value]
+                    on-caret [caret-at event/detail] on-undo [code-undo event/detail 'undo] on-redo [code-undo event/detail 'redo]
             ]
         ]
         panel "Properties" pad 4 [

@@ -2,7 +2,10 @@
 // It is a widget face: its value is the text, both ways; `change` says the person changed it. Properties:
 //   mark   [index length] of the text to mark (the chosen face), in code points from 1, or none
 //   words  {style-word: kind}: words coloured as the dialect's (kind = "style" or "flag")
-// Events: `caret` with detail = the code point index (from 1) where the person put the cursor.
+// Events: `caret` with detail = the code point index (from 1) where the person put the cursor; `undo` and `redo`
+// on Ctrl+Z and Ctrl+Shift+Z or Ctrl+Y (Cmd on a Mac): the designer keeps the history, as it has every change,
+// made in the code or with the mouse, so this editor keeps none. Their detail is the text when a change typed
+// is still waiting to be sent, which then is not sent apart: none when there is none.
 // <trebol-code-small>: the same for a block of a property: no line numbers, as tall as its lines (up to 10),
 // and `change` only once the person leaves it, so what they type is read when they are done.
 // Built into app/trebol-code.js by `npm run build:editor`.
@@ -169,6 +172,15 @@ class TrebolCode extends HTMLElement {
   #changed = 0;
   #dirty = false;
 
+  // what was typed and not yet sent goes with the undo, as one event, so it is undone as the rest
+  #ask(what) {
+    const waiting = this.#changed !== 0;
+    clearTimeout(this.#changed);
+    this.#changed = 0;
+    this.dispatchEvent(new CustomEvent(what, { detail: waiting ? this.#text : null }));
+    return true;
+  }
+
   #left() {
     if (!this.#dirty) return;
     this.#dirty = false;
@@ -189,15 +201,23 @@ class TrebolCode extends HTMLElement {
   }
 
   #state(doc) {
+    const small = this.constructor.small;
+    // the small one undoes its own typing; the big one asks the designer
+    const undo = small ? [history()] : [];
+    const undoKeys = small ? historyKeymap : [
+      { key: 'Mod-z', run: () => this.#ask('undo'), preventDefault: true },
+      { key: 'Mod-Shift-z', run: () => this.#ask('redo'), preventDefault: true },
+      { key: 'Mod-y', run: () => this.#ask('redo'), preventDefault: true },
+    ];
     return EditorState.create({
       doc,
       extensions: [
         ...(this.constructor.small ? [] : [lineNumbers()]),
-        history(), drawSelection(), highlightActiveLine(), bracketMatching(), highlightSelectionMatches(),
+        ...undo, drawSelection(), highlightActiveLine(), bracketMatching(), highlightSelectionMatches(),
         indentUnit.of('    '), EditorState.tabSize.of(4),
         StreamLanguage.define(trebolMode(this.#words)), syntaxHighlighting(highlight),
         this.constructor.small ? smallTheme : theme, markField,
-        keymap.of([indentWithTab, ...defaultKeymap, ...historyKeymap, ...searchKeymap]),
+        keymap.of([...undoKeys, indentWithTab, ...defaultKeymap, ...searchKeymap]),
         EditorView.contentAttributes.of({ 'aria-label': this.getAttribute('aria-label') ?? 'Code' }),
         EditorView.updateListener.of(u => this.#update(u)),
       ],
@@ -211,7 +231,7 @@ class TrebolCode extends HTMLElement {
       if (this.constructor.small) { this.#dirty = true; return; }
       // the design is read again from the text: not on every key
       clearTimeout(this.#changed);
-      this.#changed = setTimeout(() => this.dispatchEvent(new Event('change')), 250);
+      this.#changed = setTimeout(() => { this.#changed = 0; this.dispatchEvent(new Event('change')); }, 250);
     }
     if (u.selectionSet && !mine && !u.docChanged && u.transactions.some(tr => tr.isUserEvent('select'))) {
       const at = u.state.selection.main.head;

@@ -46,8 +46,11 @@ column it is at, and the bottom of the window counts them. They are the problems
 **Save** writes the file. *Changed* says there is something not saved. Choosing another file in **File** while
 this one has changes asks whether to leave them; saying no stays on the file.
 
-The designer has no *Undo* of its own yet: a change made with the mouse is taken back by changing it back, and
-leaving a file without keeping its changes takes back all of them. Save often, and keep the project in git.
+**Undo** and **Redo**, beside *Save*, take back the last change and bring it back again, one at a time, whether
+it was made with the mouse, in the properties or in the code. Ctrl+Z undoes and Ctrl+Shift+Z or Ctrl+Y redoes
+(⌘ on a Mac); in a box of the properties they undo what is typed in that box, as in any text box, and in the
+code they undo the code as the rest. Each file keeps its own, while the designer is open; leaving a file
+without keeping its changes leaves what undoes them too. Saving keeps them: what was saved can still be undone.
 
 ## On a web page
 

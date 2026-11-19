@@ -40,7 +40,8 @@ press Ctrl+C in the terminal.
   folders. Choose one to design it.
 - **Design / Split / Code**: what the middle shows. *Design* gives it all to the preview, *Code* all to the code,
   *Split* shows both side by side.
-- **Saved** or **Changed**, and **Save**. *Changed* says the file has changes not written to disk yet.
+- **Saved** or **Changed**, **Undo**, **Redo** and **Save**. *Changed* says the file has changes not written to
+  disk yet; *Undo* takes back the last change and *Redo* brings it back.
 
 **Structure**, on the left: the faces of each `view` in the file, nested as they are written. A face that holds
 others, a form, a panel, a screen, opens and closes with the arrow beside it. **Add**, above it, adds a face.

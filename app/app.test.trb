@@ -230,6 +230,49 @@ serve [
     all ['style = select code-view/props/words 'note  'style = select code-view/props/words 'heading]
 ]
 
+"undo and redo"
+[
+    ; a change made with the mouse is undone and done again
+    nothing-yet: all [undo-button/disabled  redo-button/disabled]
+    click {heading "Join us"}
+    click "Delete"
+    see/not {heading "Join us"}
+    click "Undo"
+    see {heading "Join us"}
+    see "Saved"
+    click "Redo"
+    see/not {heading "Join us"}
+    see "Changed"
+    all [nothing-yet  redo-button/disabled  not undo-button/disabled]
+]
+[
+    ; Ctrl+Z on the page undoes; in a box the user types in it is the box's own
+    click {field name "Name"}
+    type "Text" "Full name"
+    see {field name "Full name"}
+    press/on "Ctrl+Z" "Find an option"
+    see {field name "Full name"}
+    press "Ctrl+Z"
+    see {field name "Name"}
+    press "Ctrl+Shift+Z"
+    see {field name "Full name"}
+    press "Ctrl+Z"
+    press "Ctrl+Y"
+    see {field name "Full name"}
+]
+[
+    ; each file keeps its own: opening another is no change to undo
+    click {heading "Join us"}
+    click "Delete"
+    click "Save"
+    choose "File" "notes.trb"
+    other: undo-button/disabled
+    choose "File" "app.trb"
+    click "Undo"
+    see {heading "Join us"}
+    other
+]
+
 "a file that does not load"
 [
     choose "File" "broken.trb"
