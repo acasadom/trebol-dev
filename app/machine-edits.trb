@@ -3,7 +3,7 @@ Trebol [
     exports: [
         add-state rename-state delete-state set-initial
         add-way delete-way set-way-events set-way-target set-way-code
-        set-state-word state-word-value way-code
+        set-state-word state-word-value way-code range-span
     ]
 ]
 

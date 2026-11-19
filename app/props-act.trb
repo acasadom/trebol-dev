@@ -1,0 +1,130 @@
+Trebol [
+    title: "The designer's properties: what each control of a face's options and handlers does to the text"
+]
+
+; Run by app.trb (do), so it shares the app's words: d, the-face, edit, prop-entries.
+
+; what a control of the properties did: the k-th option (a group of entries), or 0 for the
+; texts, what it follows and handlers
+prop-act: function [k [integer!] what [word!] value] [
+    g: either k > 0 [pick prop-entries k] [none]
+    if what = 'check [return either g [prop-check g value] [true]]
+    unless f: the-face [exit]
+    e: all [g  first g]
+    ; typing goes on in the control: the panel is laid out again only for a choice or a removal
+    if find [values code text hint is calc react event action label screen-name screen-title screen-args piece-label] what [set 'keep-props true]
+    ; a picked icon shows in the panel: laid out again
+    t: switch what [
+        flag [either value [set-option d f e none] [remove-option d f e]]
+        choice [set-option d f e reduce [to word! value]]
+        icon [prop-values f g mold to issue! form value]
+        custom [either value/2 [set-option/rule d f e none value/1] [remove-option/rule d f e value/1]]
+        values [prop-values f g value]
+        code [
+            either empty? trim copy value [remove-option d f e] [
+                b: attempt [load value]
+                either block? b [set-option d f e reduce [b]] [none]
+            ]
+        ]
+        remove [
+            either e/how = 'custom [
+                ; every rule of a program the face has goes
+                foreach w custom-rule-words [
+                    if option-of/rule face-parts d f e w [write-text remove-option/rule d f e w  f: the-face]
+                ]
+                none
+            ] [
+                q: group-part face-parts d f g
+                either q [remove-option d f q/2] [none]
+            ]
+        ]
+        text [set-face-text d f value]
+        hint [set-hint d f value]
+        is calc react [
+            b: attempt [load value]
+            set-reaction d f what either all [block? b  not empty? b] [b] [none]
+        ]
+        label [
+            w: all [string? value  not empty? trim copy value  attempt [load value]]
+            case [
+                none? w [set-face-label d f none]
+                word? w [set-face-label d f w]
+                true [none]
+            ]
+        ]
+        global [set-face-global d f value]
+        screen-name [w: attempt [load value]  either word? w [set-screen d f 'name w] [none]]
+        screen-title [set-screen d f 'title value]
+        screen-args [
+            w: attempt [load/all value]
+            either all [block? w  parse w [any word!]] [set-screen d f 'args w] [none]
+        ]
+        add-screen [add-screen d f]
+        piece-label [set-piece-label d f value]
+        add-piece [add-piece d f value]
+        action [
+            b: all [string? value  not empty? trim copy value  attempt [load value]]
+            set-action d f either all [block? b  not empty? b] [b] [none]
+        ]
+        event [
+            b: all [string? value/2  not empty? trim copy value/2  attempt [load value/2]]
+            either block? b [set-event d f value/1 b] [remove-event d f value/1]
+        ]
+    ]
+    either t [edit t] [set 'keep-props false]
+]
+
+; what is typed for an option, as the values of the entry of its group that takes them, or none
+typed-as: function [g [block!] value [string!]] [
+    vals: attempt [load/all value]
+    unless block? vals [return none]
+    foreach e g [
+        case [
+            find [name label] e/how [if all [1 = length? vals  word? first vals] [return reduce [e vals]]]
+            ; a block is typed as it is shown: [1 2 1]
+            e/how = 'block [if all [1 = length? vals  block? first vals] [return reduce [e vals]]]
+            true [
+                vs: vals
+                ; a text is typed as it is shown, with or without its quotes
+                if all [find e/args 'text  not string? first vals] [vs: reduce [value]]
+                if all [(length? vs) = length? e/args  args-take? e/args vs] [return reduce [e vs]]
+            ]
+        ]
+    ]
+    none
+]
+
+args-take?: function [args [block!] vals [block!]] [
+    repeat i length? args [
+        a: pick args i  v: pick vals i
+        ok: case [
+            a = 'text [any [string? :v  map? :v  lit-word? :v]]
+            'one-of = first a [all [word? :v  to logic! find either word? a/2 [get a/2] [a/2] v]]
+            true [
+                rule: copy []
+                foreach t a [unless empty? rule [append rule '|]  append rule t]
+                parse reduce [:v] rule
+            ]
+        ]
+        unless ok [return false]
+    ]
+    true
+]
+
+prop-check: function [g [block!] value] [
+    if any [not string? value  empty? trim copy value  typed-as g value] [return true]
+    m: copy ""
+    foreach e g [unless empty? m [append m " or "]  append m type-of-args e]
+    rejoin ["it takes " m]
+]
+
+; values typed for an option: written when they are what it takes, taken out when emptied
+prop-values: function [f g [block!] value [string!]] [
+    q: group-part face-parts d f g
+    if empty? trim copy value [return either q [remove-option d f q/2] [none]]
+    unless t: typed-as g value [return none]
+    e: t/1  vals: t/2
+    if e/how = 'name [return set-face-name d f first vals]
+    ; written in another of its ways: in place of it
+    either all [q  not same? q/2 e] [set-option/over d f e vals q/1] [set-option d f e vals]
+]

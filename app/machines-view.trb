@@ -1,0 +1,325 @@
+Trebol [
+    title: "The designer's machines: the structure, the properties and the code of the machines a file makes"
+]
+
+; Run by app.trb (do), so it shares the app's words: d, text, edit, code-view. The header's Edit switch
+; shows either the screens of a file or its machines; both write the same text, through the same Undo.
+; What is chosen is kept by place, [k id what]: the k-th machine of the file, and the id of one of its
+; nodes (what = 'machine or 'state) or of one of its ways (what = 'way).
+
+editing: "Screens"      ; or "Machines": what the window edits
+ms: []                  ; the machines of the design, read again with it
+picked: none            ; [k id what], or none
+keep-mprops: false      ; a property being typed in: the panel stays, so the typing goes on
+
+picked-machine: does [all [picked  pick ms picked/1]]
+picked-node: does [all [m: picked-machine  picked/3 <> 'way  machine-node m picked/2]]
+picked-way: does [all [m: picked-machine  picked/3 = 'way  pick m/ways picked/2]]
+
+show-editing: function [what [string!]] [
+    set 'editing what
+    machines?: what = "Machines"
+    add-button/hidden: structure/hidden: machines?
+    machine-side/hidden: not machines?
+    preview-pane/hidden: any [machines?  mode-f/value = "Code"]
+    machine-pane/hidden: any [not machines?  mode-f/value = "Code"]
+    redraw
+]
+
+; --- the structure -----------------------------------------------------------------------------
+
+state-title: function [m [object!] n [object!]] [
+    t: rejoin [n/kind " " n/name]
+    p: all [n/parent  machine-node m n/parent]
+    if all [p  p/initial = n/name] [append t " (initial)"]
+    t
+]
+
+way-title: function [m [object!] w [object!]] [
+    to-names: collect [foreach [b k] w/targets [keep mold pick b k]]
+    t: either w/kind = 'to [rejoin ["to " first to-names]] [rejoin [form any [w/kind "from"] " " form to-names]]
+    l: way-label w
+    if all [not empty? l  w/kind = 'to] [append t rejoin [" on " l]]
+    if all [w/events  w/kind <> 'to] [append t rejoin [" on " form w/events]]
+    t
+]
+
+node-tree: function [m [object!] k [integer!] id [integer!]] [
+    n: machine-node m id
+    node: make map! reduce [
+        'id rejoin [either id = 1 ["m"] ["s"] k "." id]
+        'name either id = 1 [rejoin [either m/name [rejoin [m/name ": "]] [""] "machine"]] [state-title m n]
+    ]
+    kids: collect [
+        foreach c n/children [keep node-tree m k c]
+        ; the ways out of a state hang from it; one that names no state here, from its level
+        foreach w m/ways [
+            src: way-source m w
+            if any [src = id  all [none? src  w/level = id]] [
+                keep make map! reduce ['id rejoin ["w" k "." w/id] 'name way-title m w]
+            ]
+        ]
+    ]
+    unless empty? kids [node/children: kids  node/expanded: true]
+    node
+]
+
+tree-id: function [p [block!]] [rejoin [select [machine "m" state "s" way "w"] p/3 p/1 "." p/2]]
+
+pick-machine: function ["Chooses what a row of the machines' structure is" id [string!]] [
+    what: select [#"m" machine #"s" state #"w" way] first id
+    parts: split next id #"."
+    set 'picked reduce [to integer! parts/1 to integer! parts/2 what]
+    mark-machine
+    fill-mprops
+]
+
+redraw-machines: function [] [
+    set 'ms either d [machines-of d] [copy []]
+    if all [picked  any [not pick ms picked/1  not either picked/3 = 'way [picked-way] [picked-node]]] [set 'picked none]
+    k: 0
+    machine-tree/data: collect [foreach m ms [k: k + 1  keep node-tree m k 1]]
+    machine-tree/selected: all [picked  machine-node-of tree-id picked machine-tree/data]
+    machine-none/hidden: not empty? ms
+    if editing = "Machines" [
+        mark-machine
+        either keep-mprops [set 'keep-mprops false] [fill-mprops]
+    ]
+]
+
+machine-node-of: function [id list [block!]] [
+    foreach n list [
+        if n/id = id [return n]
+        if n/children [if found: machine-node-of id n/children [return found]]
+    ]
+    none
+]
+
+; what is chosen, marked in the code
+picked-span: function [] [
+    unless m: picked-machine [return none]
+    switch picked/3 [
+        machine [block-span d m/block]
+        state [n: picked-node  range-span d n/holder n/from n/to]
+        way [w: picked-way  range-span d w/block w/from w/to]
+    ]
+]
+
+mark-machine: function [] [
+    s: picked-span
+    code-view/props: make code-view/props [mark: either s [reduce [s/x s/y]] [none]]
+]
+
+; the cursor put in the code: the innermost state or way written around it
+machine-caret: function [at [integer!]] [
+    spots: copy []      ; [k id what span ...]: every machine, state and way, where it is written
+    k: 0
+    foreach m ms [
+        k: k + 1
+        append spots reduce [k 1 'machine block-span d m/block]
+        foreach n next m/nodes [append spots reduce [k n/id 'state range-span d n/holder n/from n/to]]
+        foreach w m/ways [append spots reduce [k w/id 'way range-span d w/block w/from w/to]]
+    ]
+    best: none
+    foreach [k id what s] spots [
+        if all [at >= s/x  at <= (s/x + s/y)  any [not best  s/y <= best/4/y]] [best: reduce [k id what s]]
+    ]
+    if all [best  any [not picked  (copy/part best 3) <> picked]] [
+        set 'picked copy/part best 3
+        machine-tree/selected: machine-node-of tree-id picked machine-tree/data
+        mark-machine
+        fill-mprops
+    ]
+]
+
+; --- adding --------------------------------------------------------------------------------------
+
+new-machine-code: function [] [
+    names: collect [foreach m ms [if m/name [keep m/name]]]
+    name: 'machine-1
+    k: 1
+    while [find names name] [k: k + 1  name: to word! rejoin ["machine-" k]]
+    rejoin [name ": machine [" newline "    initial start" newline "    state start []" newline "]" newline]
+]
+
+machine-add: function ["What the Add menu of the machines does" item [word!]] [
+    if item = 'machine [
+        t: copy text
+        unless any [empty? t  newline = last t] [append t newline]
+        unless empty? t [append t newline]
+        edit append t new-machine-code
+        set 'picked reduce [length? ms 1 'machine]
+        redraw
+        exit
+    ]
+    unless m: picked-machine [exit]
+    ; inside the chosen state, or the level of the chosen way
+    at: either w: picked-way [w/level] [picked/2]
+    if 'final = select machine-node m at 'kind [at: select machine-node m at 'parent]
+    base: select [state state final done parallel together] item
+    name: fresh-state-name m base
+    if t: add-state d m at name item [
+        k: picked/1
+        edit t
+        foreach n select pick ms k 'nodes [if n/name = name [set 'picked reduce [k n/id 'state]]]
+        redraw
+    ]
+]
+
+; --- the properties ------------------------------------------------------------------------------
+
+code-field: function [label [string!] help [string!] what value] [
+    compose/deep [
+        text (label)
+        widget <trebol-code-small> [] with [value: (any [value ""])] on-change [machine-act (to lit-word! what) value]
+        text small muted (help)
+    ]
+]
+
+state-choices: function [m [object!]] [
+    collect [foreach n next m/nodes [keep form to path! machine-path m n/id]]
+]
+
+machine-props-code: function [] [
+    m: picked-machine
+    switch picked/3 [
+        machine [
+            compose/deep [
+                code (rejoin [either m/name [rejoin [m/name ": "]] [""] "machine"])
+                text small muted "Add states to it with Add; ways go from one state to another."
+                (code-field "data" "its fields and their first values: parts: 0" 'data state-word-value d m 1 'data)
+                button #trash "Delete" danger [machine-act 'delete-machine none]
+            ]
+        ]
+        state [
+            n: picked-node
+            p: machine-node m n/parent
+            out: compose/deep [
+                code (state-title m n)
+                text small muted (form to path! machine-path m n/id)
+                field "name" "word" with [value: (form n/name)] on-change [machine-act 'name value]
+            ]
+            if p/kind <> 'parallel [
+                append out compose/deep [
+                    check "initial: its level starts here" with [value: (p/initial = n/name)] on-change [machine-act 'initial value]
+                ]
+            ]
+            if n/kind = 'final [
+                append out compose/deep [
+                    field "outcome" "the word the machine ends with" with [value: (either n/outcome [form pick n/holder n/outcome] [""])]
+                        on-change [machine-act 'outcome value]
+                ]
+            ]
+            append out code-field "on-enter" "runs when the machine comes into it" 'on-enter state-word-value d m n/id 'on-enter
+            append out code-field "on-exit" "runs when the machine leaves it" 'on-exit state-word-value d m n/id 'on-exit
+            if n/kind <> 'final [
+                append out compose/deep [
+                    field "timeout" "seconds, a time (0:15) or data/field" with [value: (any [state-word-value d m n/id 'timeout ""])]
+                        on-change [machine-act 'timeout value]
+                ]
+                append out code-field "run" "work that takes a while: done or error when it ends" 'run state-word-value d m n/id 'run
+                append out compose/deep [
+                    field "defer" "events kept until a state takes them" with [value: (any [state-word-value d m n/id 'defer ""])]
+                        on-change [machine-act 'defer value]
+                ]
+            ]
+            unless empty? n/children [
+                if n/kind = 'state [
+                    append out compose/deep [
+                        check "history: comes back to the state it left" with [value: (not select n/words 'no)] on-change [machine-act 'history value]
+                    ]
+                ]
+            ]
+            append out compose/deep [
+                row [
+                    button #arrow-right "Add a way" menu [(collect [foreach n next m/nodes [keep form to path! machine-path m n/id  keep to word! rejoin ["state-" n/id]]])]
+                        on-menu [machine-act 'way-to event/picked]
+                    button #trash "Delete" danger [machine-act 'delete none]
+                ]
+            ]
+            out
+        ]
+        way [
+            w: picked-way
+            out: compose/deep [
+                code (rejoin ["from " w/source " " way-title m w])
+                field "on" "the events it is taken on: start, or [start go]" with [value: (either w/events [form w/events] [""])]
+                    on-change [machine-act 'events value]
+            ]
+            if w/kind = 'to [
+                append out compose/deep [
+                    choice "to" [(state-choices m)] with [value: (form to path! machine-path m any [first way-targets m w 1])]
+                        on-change [machine-act 'target value]
+                ]
+            ]
+            if w/branches [
+                append out compose/deep [
+                    text small muted (rejoin [either w/kind = 'select ["select"] ["choose"] ": " (length? w/choices) / 3 " branches, in the code"])
+                ]
+            ]
+            if w/events [append out code-field "where" "a condition: the way is taken only when it holds" 'where way-code d w 'where]
+            append out code-field "set" "the data it changes when taken: parts: event/count" 'set way-code d w 'set
+            append out [button #trash "Delete" danger [machine-act 'delete-way none]]
+            out
+        ]
+    ]
+]
+
+fill-mprops: function [] [
+    if editing <> "Machines" [exit]
+    machine-props/hidden: not picked
+    nothing-chosen/hidden: to logic! picked
+    props/hidden: true
+    if picked [machine-props/pane: layout/only machine-props-code]
+]
+
+; what a control of the machine's properties did
+machine-act: function [what [word!] value] [
+    unless m: picked-machine [exit]
+    n: picked-node
+    w: picked-way
+    id: picked/2
+    if find [name data outcome on-enter on-exit timeout run defer events where set] what [set 'keep-mprops true]
+    t: switch what [
+        name [all [string? value  v: attempt [load value]  word? v  rename-state d m id v]]
+        initial [either value [set-initial d m id] [none]]
+        outcome [
+            v: all [string? value  attempt [load value]]
+            s: all [n/outcome  span-of d n/holder n/outcome]
+            case [
+                all [s  any [none? v  v = []]] [splice d/text s/x - 1 s/y + 1 ""]
+                not word? v [none]
+                s [splice d/text s/x s/y form v]
+                true [s: span-of d n/holder n/from + 1  splice d/text s/x + s/y 0 rejoin [" " v]]
+            ]
+        ]
+        data on-enter on-exit run [set-state-word d m id what value]
+        timeout defer [set-state-word d m id what value]
+        history [set-state-word d m id 'no either value [none] ["history"]]
+        way-to [add-way d m id to integer! skip form value 6 'go]
+        delete [r: delete-state d m id  set 'picked none  r]
+        delete-machine [
+            r: none
+            foreach [blk sps own] d/blocks [
+                repeat i length? blk [
+                    if same? pick blk i m/block [
+                        ; with the word it is set to: repair: machine [...]
+                        from: either all [i > 2  set-word? pick blk i - 2] [i - 2] [i - 1]
+                        r: cut d/text range-span d blk from i
+                    ]
+                ]
+            ]
+            set 'picked none
+            r
+        ]
+        events [
+            v: any [attempt [load/all any [value ""]] copy []]
+            if all [block? v  1 = length? v  block? first v] [v: first v]
+            either all [block? v  parse v [any word!]] [set-way-events d m w v] [none]
+        ]
+        target [set-way-target d m w find-machine-state m 1 load value]
+        where set [set-way-code d m w what value]
+        delete-way [r: delete-way d m w  set 'picked none  r]
+    ]
+    either t [edit t] [set 'keep-mprops false]
+]

@@ -1,0 +1,168 @@
+Trebol [title: "The designer's machines: screen tests"  app: %app.trb]
+
+disk: #(
+    "repair.trb" {Trebol [title: "Repairs"]
+
+repair: machine [
+    initial received
+    state received []
+    state work [
+        initial checking
+        state checking []
+        state fixing []
+        from checking to fixing on fixable
+    ]
+    final ready
+    from received to work on start
+    from work to ready on fixed
+]
+}
+    "app.trb" {Trebol [title: "Signup"]
+
+view [heading "Join us"]
+}
+)
+written: none
+
+serve [
+    GET "/api/files" [#(name: "shop" files: ["app.trb" "repair.trb"])]
+    GET "/api/file" [select disk query/path]
+    PUT "/api/file" [written: body  "Saved."]
+]
+
+machines: does [choose "File" "repair.trb"  choose "Edit" "Machines"]
+
+"the structure of a machine"
+[
+    machines
+    see "repair: machine"
+    see "state received (initial)"
+    see "final ready"
+    see "to work on start"
+    see "to fixing on fixable"
+    see/not {heading "Join us"}
+    machine-props/hidden
+]
+[
+    ; back to the screens
+    machines
+    choose "Edit" "Screens"
+    choose "File" "app.trb"
+    see {heading "Join us"}
+    machine-side/hidden
+]
+
+"a state's properties"
+[
+    machines
+    click "state received (initial)"
+    type "name" "arrived"
+    click "Save"
+    to logic! all [
+        find written "initial arrived"
+        find written "state arrived []"
+        find written "from arrived to work on start"
+        not find written "received"
+    ]
+]
+[
+    machines
+    click "state fixing"
+    click "initial: its level starts here"
+    click "Save"
+    to logic! find written "initial fixing^/        state checking"
+]
+[
+    machines
+    click "state checking (initial)"
+    type "timeout" "0:15"
+    click "Save"
+    to logic! find written "state checking [^/            timeout 0:15^/        ]"
+]
+
+"adding and deleting"
+[
+    machines
+    click "repair: machine"
+    pick-menu "Add" "State"
+    see "state state"
+    click "Save"
+    to logic! find written "final ready^/    state state []^/"
+]
+[
+    machines
+    click "state work"
+    pick-menu "Add" "Final state"
+    see "final done"
+    click "Save"
+    to logic! find written "state fixing []^/        final done^/"
+]
+[
+    machines
+    click "state received (initial)"
+    pick-menu "Add a way" "ready"
+    see "to ready on go"
+    click "Save"
+    to logic! find written "from work to ready on fixed^/    from received to ready on go^/"
+]
+[
+    machines
+    click "state fixing"
+    click "Delete"
+    see/not "state fixing"
+    click "Save"
+    to logic! all [not find written "fixing"  find written "state checking []^/    ]"]
+]
+[
+    ; a file with none gets one
+    choose "File" "app.trb"
+    choose "Edit" "Machines"
+    see "This file makes no machines. Add one with Add, Machine."
+    pick-menu "Add" "Machine"
+    see "machine-1: machine"
+    see "state start (initial)"
+    click "Save"
+    to logic! find written {view [heading "Join us"]^/^/machine-1: machine [^/    initial start^/    state start []^/]^/}
+]
+[
+    machines
+    click "repair: machine"
+    click "Delete"
+    see/not "repair: machine"
+    click "Undo"
+    see "repair: machine"
+]
+
+"a way's properties"
+[
+    machines
+    click "to work on start"
+    type "on" "[begin go]"
+    see "to work on begin go"
+    click "Save"
+    to logic! find written "from received to work on [begin go]"
+]
+[
+    machines
+    click "to work on start"
+    choose "to" "ready"
+    see "to ready on start"
+    click "Save"
+    to logic! find written "from received to ready on start"
+]
+[
+    machines
+    click "to ready on fixed"
+    click "Delete"
+    see/not "to ready on fixed"
+    click "Save"
+    not find written "fixed"
+]
+
+"the code marks what is chosen"
+[
+    machines
+    click "state work"
+    s: code-view/props/mark
+    all [block? s  "state work [" = copy/part at text s/1 12]
+]
