@@ -77,12 +77,16 @@ view [
 
 ## Moving and deleting
 
-- **Drag** a row of the structure up or down among the faces beside it to move its face. **Up** and **Down**,
-  at the bottom of the properties, move it one place at a time.
+- **Drag** a row of the structure to move its face. Dropped between two rows, it goes there, in whatever box
+  those rows are in; dropped on the middle of a box's row, it goes into that box, last.
+- **Up** and **Down**, at the bottom of the properties, move it one place at a time. Next to a box they take it
+  in: **Down** makes it the first face of the box below, **Up** the last of the box above. At the edge of its box
+  they take it out: **Down** on the last face puts it right after its box, **Up** on the first right before.
 - **Delete** takes the chosen face out, with every face inside it.
 
-A face moves among the faces of the box it is in. To put it into another box, move its lines in the code: the
-structure follows at once. The view is never moved nor deleted, as it holds the rest.
+A box moves with every face inside it, and its lines are indented as the place it goes. The view, a screen, a
+tab and a step are never moved this way: the view holds the rest, and a screen, a tab or a step stays in the
+face it belongs to. A face never goes into itself.
 
 A face that moves takes its comment with it, and one that goes takes its line.
 

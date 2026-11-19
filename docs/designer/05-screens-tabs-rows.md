@@ -15,9 +15,9 @@ The shop needs more than the counter: the bikes in the workshop, and a page for 
    - **Add a screen** adds another, empty, after the last.
 3. Choose `screen details "Details"`: name it `workshop`, titled `Workshop`.
 
-The counter's form belongs in the counter screen. A face moves with the mouse only among the faces beside it, so
-put it there in the code: cut the lines of the form, from `form [` to its `]`, and paste them into the counter's
-block, in place of its `text "Home"`. The structure follows as soon as the code loads again.
+The counter's form belongs in the counter screen. Drag the row of the form in the structure onto the row of
+`text "Home"`: the form goes into the counter screen, with every face inside it, just above that text. Then
+choose `text "Home"` and **Delete** it.
 
 ## The workshop
 

@@ -1,0 +1,21 @@
+Trebol [
+    title: "A file to move faces in: boxes, one of them empty"
+    exports: [move-sample face]
+]
+
+import %model.trb
+
+move-sample: {view [
+    heading "Join us"
+    column [
+        field name "Name"  ; theirs
+        field email "Email"
+    ]
+    row [
+        button "Save"
+    ]
+    panel "Empty" []
+]}
+
+; the faces of the structure: 1 view, 2 heading, 3 column, 4 name, 5 email, 6 row, 7 Save, 8 panel
+face: function [d n] [pick shown-faces d n]

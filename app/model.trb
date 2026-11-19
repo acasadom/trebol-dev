@@ -4,7 +4,7 @@ Trebol [
         design-of spot-of span-of face-range face-span face-code faces-of
         splice cut replace-value remove-face insert-after insert-into move-face
         set-face-text set-face-name face-label style-word toggle-flag
-        layout-of head-end block-span indent-at shown-faces
+        layout-of head-end block-span indent-at after-line shown-faces
         pane-of own-block written-range values-at inside? set-screen screens-data add-screen piece? set-piece-label add-piece
         set-face-label set-face-global
     ]

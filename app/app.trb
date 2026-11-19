@@ -14,10 +14,8 @@ import %options.trb
 import %props.trb
 import %samples.trb
 import %history.trb
+import %move.trb
 import %trebol-code.js
-
-; the styles whose block holds faces: what is added with one of them chosen goes inside it
-boxes: [view row column panel form grid scroll dialog device]
 
 files: copy []
 path: none          ; the file being designed, from the project's folder
@@ -382,20 +380,6 @@ prop-values: function [f g [block!] value [string!]] [
 ]
 
 ; the loaded block that holds a box's faces
-pane-block: function [f] [
-    if b: own-block d f [return b]
-    ; rows: the faces of one row, its template
-    if f/style = 'rows [
-        r: face-range d f
-        foreach p face-parts d f [
-            if all [p/what = 'block  p/e/field = first [template:]] [return pick r/1 p/from]
-        ]
-    ]
-    unless all [find boxes f/style  r: face-range d f] [return none]
-    b: pick r/1 r/3
-    either block? b [b] [none]
-]
-
 ; a screens face shows one screen: the one the chosen face is on, or its first; tabs and steps
 ; show the tab or step the chosen face is on
 show-screens: function [] [
@@ -463,53 +447,40 @@ code-words: make map! []
 own-words: []
 foreach w ui-dialect-words [put code-words w either select styles w ['style] ['flag]]
 
-; up: the sibling before goes after it; down: it goes after the sibling after it
+; up or down: past the face beside it, into a box beside it, or out of its box
 step-face: function [by [integer!]] [
-    f: the-face
-    ; a view stays where it is: it holds the rest
-    unless all [f  not own-block d f] [exit]
-    r: face-range d f
-    before: after: none
-    foreach g shown-faces d [
-        q: face-range d g
-        if all [same? head q/1 head r/1  not same? g f] [
-            if q/3 < r/2 [before: g]
-            if all [q/2 > r/3  not after] [after: g]
-        ]
-    ]
-    either by > 0 [
-        if after [edit move-face d f after  set 'chosen chosen + 1 + count-inside after  redraw]
-    ] [
-        if before [edit move-face/before d f before  set 'chosen chosen - 1 - count-inside before  redraw]
-    ]
+    unless all [f: the-face  m: move-step d f by] [exit]
+    edit m/1
+    set 'chosen m/2
+    redraw
 ]
 
 ; a row dragged in the structure: its face goes where it was dropped among its siblings
 reorder: function [parent from [integer!] to [integer!]] [
     list: either parent [parent/children] [structure/data]
-    fs: shown-faces d
     ; the tree has moved the row already: it is at to, and the one it went beside next to it
     a: pick list to
     b: pick list either to > from [to - 1] [to + 1]
-    f: pick fs a/id
-    g: pick fs b/id
-    if any [own-block d f  own-block d g] [redraw  exit]
-    either to > from [
-        edit move-face d f g
-        set 'chosen b/id + (count-inside g) - count-inside f
-    ] [
-        edit move-face/before d f g
-        set 'chosen b/id
-    ]
-    redraw
+    fs: shown-faces d
+    place-face (pick fs a/id) reduce [either to > from ['after] ['before] pick fs b/id]
 ]
 
-; how many faces of the structure a face holds: the chosen index jumps them
-count-inside: function [f] [
-    n: 0
-    ; as the structure lists them: every face written, and those inside one that is not, as the entry of rows
-    foreach g any [pane-of d f []] [n: n + (either face-range d g [1] [0]) + count-inside g]
-    n
+; a row dragged to another level of the structure: before the row it was dropped above, or the last of its box
+drop-face: function [node parent index [integer!]] [
+    unless parent [redraw  exit]
+    fs: shown-faces d
+    kids: any [parent/children []]
+    place-face (pick fs node/id) either index <= length? kids [
+        reduce ['before pick fs kids/:index/id]
+    ] [
+        reduce ['into pick fs parent/id]
+    ]
+]
+
+place-face: function [f where [block!]] [
+    either m: move-to d f where [edit m/1  set 'chosen m/2] [none]
+    ; a move that cannot be made puts the row back
+    redraw
 ]
 
 ; an item of the Add menu: inside the chosen face if it holds faces, else after it
@@ -519,10 +490,10 @@ add-face: function [item [word!]] [
     ; what is added is chosen: it comes right after the faces of the one it goes in or after
     at: none
     t: case [
-        all [f  b: pane-block f] [at: chosen + 1 + count-inside f  insert-into d b code]
-        f [at: chosen + 1 + count-inside f  insert-after d f code]
+        all [f  b: pane-block d f] [at: chosen + 1 + count-inside d f  insert-into d b code]
+        f [at: chosen + 1 + count-inside d f  insert-after d f code]
         all [not empty? d/layouts  v: d/layouts/1/view] [
-            at: 1 + count-inside v
+            at: 1 + count-inside d v
             insert-into d d/layouts/1/block code
         ]
     ]
@@ -553,8 +524,9 @@ view compose/deep/only [
     grid fit [small 1 medium] [
         panel "Structure" pad 2 [
             global add-button: button #plus "Add" small menu (palette-menu) on-menu [add-face event/picked]
-            global structure: tree [name] reorder on-select [choose-face row/id]
+            global structure: tree [name] reorder drop on-select [choose-face row/id]
                 on-reorder [reorder event/parent event/from event/to]
+                on-drop [drop-face event/dropped event/parent event/index]
         ]
         global centre: grid fit [1 1] [
             global preview-pane: panel "Preview" [

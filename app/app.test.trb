@@ -113,6 +113,21 @@ serve [
     not none? find written {view [^/    field name "Name"  ; theirs^/    heading "Join us"^/]}
 ]
 
+"moving into and out of boxes"
+[
+    choose "File" "pages.trb"
+    drag {heading "Welcome"} {text "Who we are"}
+    click "Save"
+    not none? find written {about "About" [^/            heading "Welcome"^/            text "Who we are"}
+]
+[
+    choose "File" "pages.trb"
+    click {field name "Name"}
+    click "Up"
+    click "Save"
+    not none? find written {text "Who we are"^/            field name "Name"^/            rows items [}
+]
+
 "columns"
 [
     click {heading "Join us"}

@@ -1,0 +1,44 @@
+Trebol [title: "Moving faces in and out of boxes" app: none]
+
+import %model.trb
+import %move.trb
+import %move-sample.trb
+
+"into a box"
+[d: design-of move-sample  m: move-to d face d 2 reduce ['into face d 6]
+    all [
+        not none? find m/1 {row [^/        button "Save"^/        heading "Join us"^/    ]}
+        none? find m/1 {view [^/    heading}
+        m/2 = 7
+        block? load m/1
+    ]]
+[d: design-of move-sample  m: move-to d face d 7 reduce ['into face d 8]
+    all [not none? find m/1 {panel "Empty" [^/        button "Save"^/    ]}  m/2 = 8]]
+"beside a face of another box, its comment with it"
+[d: design-of move-sample  m: move-to d face d 4 reduce ['before face d 7]
+    all [not none? find m/1 {row [^/        field name "Name"  ; theirs^/        button "Save"}  m/2 = 6]]
+[d: design-of move-sample  m: move-to d face d 7 reduce ['after face d 2]
+    all [not none? find m/1 {heading "Join us"^/    button "Save"^/    column}  m/2 = 3]]
+"a box moves with its faces, its lines indented as where it goes"
+[d: design-of move-sample  m: move-to d face d 3 reduce ['into face d 8]
+    all [
+        not none? find m/1 {panel "Empty" [^/        column [^/            field name "Name"  ; theirs^/            field email "Email"^/        ]^/    ]}
+        m/2 = 6
+    ]]
+"what cannot be"
+[d: design-of move-sample  none? move-to d face d 3 reduce ['into face d 4]]
+[d: design-of move-sample  none? move-to d face d 3 reduce ['into face d 3]]
+[d: design-of move-sample  none? move-to d face d 1 reduce ['into face d 8]]
+[d: design-of move-sample  none? move-to d face d 5 reduce ['into face d 3]]
+
+"up and down go in and out of boxes"
+[d: design-of move-sample  m: move-step d face d 5 1
+    all [not none? find m/1 {    ]^/    field email "Email"^/    row [}  m/2 = 5]]
+[d: design-of move-sample  m: move-step d face d 4 -1
+    all [not none? find m/1 {heading "Join us"^/    field name "Name"  ; theirs^/    column [}  m/2 = 3]]
+[d: design-of move-sample  m: move-step d face d 2 1
+    all [not none? find m/1 {column [^/        heading "Join us"^/        field name}  m/2 = 3]]
+[d: design-of move-sample  m: move-step d face d 8 -1
+    all [not none? find m/1 {button "Save"^/        panel "Empty" []^/    ]}  m/2 = 8]]
+[d: design-of move-sample  none? move-step d face d 2 -1]
+[d: design-of move-sample  none? move-step d face d 8 1]
