@@ -521,7 +521,7 @@ view compose/deep/only [
         ]
     ]
     global nothing: text muted hidden "This project has no .trb files yet."
-    grid fit [small 1 medium] [
+    grid fit [small 1 medium] resize [
         panel "Structure" pad 2 [
             global add-button: button #plus "Add" small menu (palette-menu) on-menu [add-face event/picked]
             global structure: tree [name] reorder drop on-select [choose-face row/id]

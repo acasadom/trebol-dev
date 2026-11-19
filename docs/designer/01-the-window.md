@@ -55,6 +55,11 @@ problem, a table under the preview says which and where.
 
 **Properties**, on the right: everything about the chosen face.
 
+Drag the space between two columns to make one wider: a deep structure shows its names whole, and a long
+face has room in the properties. The arrow keys move it too, once it has the focus, and a double click gives
+the column back its first width. The browser keeps the widths for the next time. A name still cut short shows
+whole when the pointer rests on it.
+
 At the bottom left, how many problems the file has.
 
 ## The chosen face
