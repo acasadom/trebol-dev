@@ -24,6 +24,7 @@
     "bin",
     "server",
     "app",
+    "!app/*.test.trb",
     "README.md",
     "LICENSE"
   ],
