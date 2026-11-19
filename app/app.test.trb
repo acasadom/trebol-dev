@@ -1,0 +1,297 @@
+Trebol [title: "The designer: screen tests"]
+
+disk: #(
+    "app.trb" {Trebol [title: "Signup"]
+
+; who signs up
+view [
+    heading "Join us"
+    field name "Name"  ; theirs
+]
+}
+    "pages.trb" {Trebol [title: "Pages"]
+
+view [
+    screens [
+        home "Home" [
+            heading "Welcome"
+        ]
+        about "About" [
+            text "Who we are"
+            rows items [
+                field name "Name"
+            ]
+        ]
+    ]
+]
+}
+    "tabs.trb" {Trebol [title: "Tabs"]
+
+view [
+    tabs ["One" [text "first"] "Two" [text "second"]]
+    steps ["Start" [text "begin"] "End" [text "finish"]]
+]
+}
+    "broken.trb" {Trebol [title: "Broken"]
+
+view [
+    heading "Half
+}
+    "notes.trb" {Trebol [title: "Notes"]
+
+stylize [note: text [role: 'muted]]
+view [
+    heading "Notes"
+]
+}
+)
+written: none
+
+serve [
+    GET "/api/files" [#(name: "shop" files: ["app.trb" "broken.trb" "notes.trb" "pages.trb" "tabs.trb"])]
+    GET "/api/file" [select disk query/path]
+    PUT "/api/file" [written: body  "Saved."]
+]
+
+"opening the project"
+[see "shop"  see {heading "Join us"}  see {field name "Name"}  see "Saved"]
+
+"changing a face"
+[
+    click {field name "Name"}
+    type "Text" "Full name"
+    see {field name "Full name"}
+    see "Changed"
+    click "Required"
+    click "Save"
+    see "Saved"
+    not none? find written {field name "Full name" required  ; theirs}
+]
+[
+    click {heading "Join us"}
+    click "Delete"
+    see/not {heading "Join us"}
+    click "Save"
+    not none? find written {view [^/    field name}
+]
+
+"adding a face"
+[
+    click {field name "Name"}
+    pick-menu "Add" ["Choice" "Checkbox"]
+    see {check "Checkbox"}
+    click "Save"
+    not none? find written {field name "Name"  ; theirs^/    check "Checkbox"^/]}
+]
+[
+    ; what is added is the face chosen: its text is typed next
+    click "view"
+    pick-menu "Add" ["Layout" "Form"]
+    pick-menu "Add" ["Input" "Field"]
+    type "text" "Email"
+    see {field "Email"}
+    pick-menu "Add" ["Action" "Submit"]
+    click "Save"
+    not none? find written {    form [^/        field "Email"^/        submit "Submit"^/    ]^/]}
+]
+
+"the name of a field"
+[
+    click {field name "Name"}
+    ; the face's text, Name, is a face of the screen too
+    type "text" "Who"
+    type "name" "full-name"
+    see {field full-name "Who"}
+    type "name" "2x"
+    see "it takes word"
+]
+
+"dragging in the structure"
+[
+    drag {field name "Name"} {heading "Join us"}
+    click "Save"
+    not none? find written {view [^/    field name "Name"  ; theirs^/    heading "Join us"^/]}
+]
+
+"moving into and out of boxes"
+[
+    choose "File" "pages.trb"
+    drag {heading "Welcome"} {text "Who we are"}
+    click "Save"
+    not none? find written {about "About" [^/            heading "Welcome"^/            text "Who we are"}
+]
+[
+    choose "File" "pages.trb"
+    click {field name "Name"}
+    click "Up"
+    click "Save"
+    not none? find written {text "Who we are"^/            field name "Name"^/            rows items [}
+]
+
+"columns"
+[
+    click {heading "Join us"}
+    pick-menu "Add" ["Layout" "Two columns"]
+    see {grid 2}
+    click {grid 2}
+    type "cols" "[1 2 1]"
+    pick-menu "Add" ["Text" "Heading"]
+    click "Save"
+    not none? find written {    grid [1 2 1] [^/        text "Left"^/        text "Right"^/        heading "Heading"^/    ]^/}
+]
+[
+    click {heading "Join us"}
+    pick-menu "Add" ["Layout" "Two columns"]
+    click {grid 2}
+    type "cols" "two"
+    see "it takes integer! or block"
+] 
+
+"the view's own words"
+[
+    click "view"
+    see/not "what it says"
+    choose "width" "fill"
+    click "Save"
+    not none? find written {view [^/    width fill^/    heading "Join us"}
+]
+[
+    click {heading "Join us"}
+    type "label" "greeting"
+    see {greeting: heading "Join us"}
+    click "global"
+    see {global greeting: heading "Join us"}
+]
+
+"a style the file defines"
+[
+    choose "File" "notes.trb"
+    click {heading "Notes"}
+    pick-menu "Add" ["This file" "note"]
+    click "Save"
+    not none? find written {heading "Notes"^/    note^/]}
+]
+
+"screens"
+[
+    choose "File" "pages.trb"
+    one: does [all [1 = length? preview/pane/1/pane  preview/pane/1/pane/1/text]]
+    first-one: one
+    click {text "Who we are"}
+    all ["Home" = first-one  "About" = one]
+]
+[
+    choose "File" "pages.trb"
+    see {screen home "Home"}
+    see {screen about "About"}
+    click {text "Who we are"}
+    see "Who we are"
+    click {screen about "About"}
+    type "title" "About us"
+    see {screen about "About us"}
+    click "Add a screen"
+    click "Save"
+    not none? find written {about "About us" [^/            text "Who we are"}
+    not none? find written {^/        ]^/        screen-1 "Screen 1" []^/    ]}
+]
+[
+    choose "File" "pages.trb"
+    click {rows items}
+    pick-menu "Add" ["Choice" "Checkbox"]
+    click "Save"
+    not none? find written {field name "Name"^/                check "Checkbox"^/            ]}
+]
+[
+    ; a row of rows written on one line: what is added goes beside it, and is the one chosen
+    choose "File" "pages.trb"
+    click {rows items}
+    pick-menu "Add" ["Input" "Money"]
+    type "text" "Price"
+    click "Save"
+    not none? find written {field name "Name"^/                money "Price"^/            ]}
+]
+
+"every screen's tables have rows to show"
+[
+    ; the design is read again while another screen is on show: the table's screen gets rows too
+    choose "File" "pages.trb"
+    click {text "Who we are"}
+    pick-menu "Add" ["Data" "Table"]
+    click {heading "Welcome"}
+    type "text" "Hello"
+    click {table}
+    t: none
+    foreach f preview/pane/1/pane/1/pane [if f/style = 'table [t: f]]
+    4 = length? t/data
+]
+
+"tabs and steps"
+[
+    choose "File" "tabs.trb"
+    click {tab "Two"}
+    two: preview/pane/1/value
+    click {text "finish"}
+    all [2 = two  2 = preview/pane/2/value  props-find/hidden = false]
+]
+[
+    choose "File" "tabs.trb"
+    click {tab "Two"}
+    props-find/hidden
+]
+
+"the code colours the file's own styles"
+[
+    choose "File" "notes.trb"
+    all ['style = select code-view/props/words 'note  'style = select code-view/props/words 'heading]
+]
+
+"undo and redo"
+[
+    ; a change made with the mouse is undone and done again
+    nothing-yet: all [undo-button/disabled  redo-button/disabled]
+    click {heading "Join us"}
+    click "Delete"
+    see/not {heading "Join us"}
+    click "Undo"
+    see {heading "Join us"}
+    see "Saved"
+    click "Redo"
+    see/not {heading "Join us"}
+    see "Changed"
+    all [nothing-yet  redo-button/disabled  not undo-button/disabled]
+]
+[
+    ; Ctrl+Z on the page undoes; in a box the user types in it is the box's own
+    click {field name "Name"}
+    type "Text" "Full name"
+    see {field name "Full name"}
+    press/on "Ctrl+Z" "Find an option"
+    see {field name "Full name"}
+    press "Ctrl+Z"
+    see {field name "Name"}
+    press "Ctrl+Shift+Z"
+    see {field name "Full name"}
+    press "Ctrl+Z"
+    press "Ctrl+Y"
+    see {field name "Full name"}
+]
+[
+    ; each file keeps its own: opening another is no change to undo
+    click {heading "Join us"}
+    click "Delete"
+    click "Save"
+    choose "File" "notes.trb"
+    other: undo-button/disabled
+    choose "File" "app.trb"
+    click "Undo"
+    see {heading "Join us"}
+    other
+]
+
+"a file that does not load"
+[
+    choose "File" "broken.trb"
+    see "Not saved: the code does not load"
+    see/not {heading "Join us"}
+    empty? structure/data
+]

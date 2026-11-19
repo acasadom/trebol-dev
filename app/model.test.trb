@@ -1,0 +1,149 @@
+Trebol [
+    title: "The model of the designer: reading a file and changing its text"
+    app: none
+]
+
+import %model.trb
+import %sample.trb
+
+"reading"
+[d: design-of sample  d/header/1 = 1x6]
+[d: design-of sample  1 = length? d/layouts]
+[d: design-of sample  [heading field field row button button] = collect [foreach f faces-of d [keep f/style]]]
+[d: design-of sample  (face-code d second faces-of d) = {who: field name "Name" required}]
+[d: design-of sample  (face-code d fourth faces-of d) = {row [
+        button "Save" [save-it]
+        button "Back"
+    ]}]
+[d: design-of sample  (face-code d fifth faces-of d) = {button "Save" [save-it]}]
+[d: design-of "x: 1"  empty? d/layouts]
+[d: design-of {view [text "😀" text "b"]}  (face-code d second faces-of d) = {text "b"}]
+
+"text of a face"
+[d: design-of sample  t: set-face-text d first faces-of d "Welcome"
+    not none? find t {heading "Welcome"^/    who:}]
+[d: design-of sample  t: set-face-text d second faces-of d "Full name"
+    not none? find t {who: field name "Full name" required  ; theirs}]
+[d: design-of {view [button [go]]}  {view [button "Go" [go]]} = set-face-text d first faces-of d "Go"]
+[d: design-of {view [field name]}  {view [field name "Name"]} = set-face-text d first faces-of d "Name"]
+
+"flags"
+[d: design-of sample  t: toggle-flag d second faces-of d 'required
+    not none? find t {who: field name "Name"  ; theirs}]
+[d: design-of sample  t: toggle-flag d third faces-of d 'required
+    not none? find t {field email "Email" required^/}]
+
+"removing"
+[d: design-of sample  t: remove-face d first faces-of d
+    not none? find t {view [^/    who: field}]
+[d: design-of sample  t: remove-face d second faces-of d
+    not none? find t {"Join us"^/    field email}]
+[d: design-of {view [text "a" text "b"]}  {view [text "a"]} = remove-face d second faces-of d]
+[d: design-of sample  t: remove-face d fourth faces-of d
+    not none? find t {"Email"^/]}]
+
+"adding"
+[d: design-of sample  t: insert-after d third faces-of d {field phone "Phone"}
+    not none? find t {"Email"^/    field phone "Phone"^/    row [}]
+[d: design-of sample  t: insert-into d d/layouts/1/block {text "End"}
+    not none? find t {    ]^/    text "End"^/]}]
+[d: design-of {view []}  {view [^/    text "a"^/]} = insert-into d d/layouts/1/block {text "a"}]
+[d: design-of {view [^/    panel "P" []^/]}  b: pick d/layouts/1/block 3
+    {view [^/    panel "P" [^/        grid 2 [^/            text "L"^/        ]^/    ]^/]} = insert-into d b {grid 2 [^/    text "L"^/]}]
+[d: design-of sample  b: pick d/layouts/1/block 12  t: insert-into d b {button "Help"}
+    not none? find t {button "Back"^/        button "Help"^/    ]}]
+; a block on one line keeps to its line; code of more lines opens it onto lines
+[d: design-of {view [^/    row [text "a"]^/]}  b: pick d/layouts/1/block 2
+    {view [^/    row [text "a"  text "b"]^/]} = insert-into d b {text "b"}]
+[d: design-of {view [^/    row [text "a"]^/]}  b: pick d/layouts/1/block 2
+    {view [^/    row [text "a"^/        grid 2 [^/            text "L"^/        ]^/    ]^/]} = insert-into d b {grid 2 [^/    text "L"^/]}]
+[d: design-of {view [^/    row [text "a"  text "c"]^/]}
+    {view [^/    row [text "a"  text "b"  text "c"]^/]} = insert-after d second faces-of d {text "b"}]
+
+"moving"
+[d: design-of sample  fs: faces-of d  t: move-face d first fs third fs
+    not none? find t {[^/    who: field name "Name" required  ; theirs^/    field email "Email"^/    heading "Join us"^/    row}]
+[d: design-of sample  fs: faces-of d  t: move-face d third fs first fs
+    not none? find t {heading "Join us"^/    field email "Email"^/    who:}]
+
+"every edit keeps the comments and loads"
+[d: design-of sample  fs: faces-of d
+    ok: true
+    foreach t reduce [
+        set-face-text d first fs "X"  toggle-flag d second fs 'required  remove-face d fourth fs
+        insert-after d third fs {text "x"}  move-face d first fs fifth fs
+    ] [
+        unless all [find t "; who signs up"  block? try [load t]] [ok: false]
+    ]
+    ok]
+
+"a comment at the end of a line stays with its face"
+[d: design-of sample  t: insert-after d second faces-of d {text "x"}
+    not none? find t {required  ; theirs^/    text "x"^/    field email}]
+[d: design-of {view [^/    text "a"  ; one^/    text "b"  ; two^/]}  fs: faces-of d
+    {view [^/    text "b"  ; two^/    text "a"  ; one^/]} = move-face d first fs second fs]
+
+"labels and names"
+[d: design-of sample  'who = face-label d second faces-of d]
+[d: design-of sample  none? face-label d first faces-of d]
+[d: design-of {view [global box: panel []]}  'box = face-label d first faces-of d]
+[d: design-of sample  t: set-face-name d third faces-of d 'mail
+    not none? find t {field mail "Email"}]
+[d: design-of {view [field "Name"]}  {view [field name "Name"]} = set-face-name d first faces-of d 'name]
+[d: design-of {view [field name "Name"]}  {view [field "Name"]} = set-face-name d first faces-of d none]
+
+"moving before"
+[d: design-of sample  fs: faces-of d  t: move-face/before d third fs first fs
+    not none? find t {view [^/    field email "Email"^/    heading "Join us"}]
+[d: design-of {view [^/    text "a"^/    text "b"  ; two^/]}  fs: faces-of d
+    {view [^/    text "b"  ; two^/    text "a"^/]} = move-face/before d second fs first fs]
+
+"the word a face was written with"
+[d: design-of {view [form [submit "Go"]]}  f: second faces-of d  all ['button = f/style  'submit = style-word d f]]
+[d: design-of {view [form [submit "Go"]]}  {view [form [submit "Send"]]} = set-face-text d second faces-of d "Send"]
+[d: design-of {view [global x: text "a"]}  'text = style-word d first faces-of d]
+"the word a face is set to"
+[d: design-of {view [text "a"]}  {view [who: text "a"]} = set-face-label d first faces-of d 'who]
+[d: design-of {view [who: text "a"]}  {view [me: text "a"]} = set-face-label d first faces-of d 'me]
+[d: design-of {view [global who: text "a"]}  {view [text "a"]} = set-face-label d first faces-of d none]
+[d: design-of {view [who: text "a"]}  {view [global who: text "a"]} = set-face-global d first faces-of d true]
+[d: design-of {view [global who: text "a"]}  {view [who: text "a"]} = set-face-global d first faces-of d false]
+"screens: each a face of the structure, its faces under it"
+[
+    d: design-of {view [screens [home "Home" [text "a"] about "About" [id] [on-enter [x] heading "b"]]]}
+    [screens screen text screen heading] = collect [foreach f faces-of d [keep f/style]]
+]
+[
+    d: design-of {view [screens [home "Home" [text "a"]]]}
+    s: second faces-of d
+    all [[1 0] = next face-range d s  {home "Home" [text "a"]} = face-code d s  'screen = style-word d s]
+]
+[
+    d: design-of {view [screens [home "Home" [text "a"]]]}
+    s: second faces-of d
+    all [
+        {view [screens [start "Home" [text "a"]]]} = set-screen d s 'name 'start
+        {view [screens [home "Start" [text "a"]]]} = set-screen d s 'title "Start"
+        {view [screens [home "Home" [id] [text "a"]]]} = set-screen d s 'args [id]
+    ]
+]
+[
+    d: design-of {view [screens [home "Home" [id] [text "a"]]]}
+    {view [screens [home "Home" [text "a"]]]} = set-screen d second faces-of d 'args none
+]
+[
+    d: design-of {view [^/    screens [^/        home "Home" [text "a"]^/    ]^/]}
+    {view [^/    screens [^/        home "Home" [text "a"]^/        screen-1 "Screen 1" []^/    ]^/]} = add-screen d first faces-of d
+]
+[d: design-of {view [screens [home "Home" [text "a"] b "B" []]]}  {view [screens [b "B" []]]} = remove-face d second faces-of d]
+"the faces of a row of rows"
+[d: design-of {view [rows items [field name "Name" check ok "Done"]]}  [rows field check] = collect [foreach f faces-of d [keep f/style]]]
+"tabs and steps: each a face of the structure, its label edited, another added"
+[d: design-of {view [tabs ["A" [text "a"] "B" [text "b"]]]}  [tabs tab text tab text] = collect [foreach f faces-of d [keep f/style]]]
+[d: design-of {view [tabs ["A" [text "a"]]]}  {view [tabs ["Start" [text "a"]]]} = set-piece-label d second faces-of d "Start"]
+[d: design-of {view [steps ["A" when [x] [text "a"]]]}  {view [steps ["One" when [x] [text "a"]]]} = set-piece-label d second faces-of d "One"]
+[
+    d: design-of {view [^/    tabs [^/        "A" [text "a"]^/    ]^/]}
+    {view [^/    tabs [^/        "A" [text "a"]^/        "Tab 2" []^/    ]^/]} = add-piece d first faces-of d 'tab
+]
+[d: design-of {view [tabs ["A" [text "a"] "B" []]]}  {view [tabs ["B" []]]} = remove-face d second faces-of d]

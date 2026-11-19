@@ -1,0 +1,80 @@
+Trebol [
+    title: "Properties: a control for every option of every style, laid out with no problem"
+    app: none
+]
+
+import %model.trb
+import %options.trb
+import %props.trb
+import %palette.trb
+
+act: func [k what value] [none]
+has?: func [b x] [to logic! find mold b x]
+
+panels-of: function [code [string!] query [string!]] [
+    d: design-of rejoin ["view [" code "]"]
+    f: first faces-of d
+    p: props-code d f query 'act
+    reduce [p/1 p/2 events-code d f query 'act]
+]
+
+sketch-ok?: function [b [block!]] [
+    r: ui-sketch b
+    all [r/1  empty? r/2]
+]
+
+"every item of the Add menu: its options and its events lay out with no problem"
+[
+    bad: copy []
+    foreach [group items] palette [
+        foreach [w label code] items [
+            p: panels-of code ""
+            unless all [sketch-ok? p/1  sketch-ok? p/3  not empty? p/2] [append bad w]
+        ]
+    ]
+    empty? bad
+]
+"every option of every style has its control: one entry for each option the style takes"
+[
+    bad: copy []
+    foreach [group items] palette [
+        foreach [w label code] items [
+            d: design-of rejoin ["view [" code "]"]
+            f: first faces-of d
+            n: 0
+            foreach [s gs] option-rows style-def-of d f [n: n + length? gs]
+            unless n = length? second props-code d f "" 'act [append bad w]
+        ]
+    ]
+    empty? bad
+]
+"what a face has is shown as written"
+[p: panels-of {field "Email" required} ""  has? p/1 "Written"]
+[p: panels-of {video %a.mp4 poster %a.jpg} ""  has? p/1 "%a.jpg"]
+[p: panels-of {chart line [a "A"]} ""  has? p/1 "line"]
+"finding narrows the options"
+[p: panels-of {field "Email"} "poster"  empty? p/2]
+[p: panels-of {video %a.mp4} "poster"  1 = length? p/2]
+"handlers"
+[p: panels-of {field "x" on-change [go]} ""  has? p/3 "[go]"]
+[p: panels-of {field "x"} "change"  has? p/3 "on-change"]
+"a style a package defines shows its own options"
+[
+    stylize [rating: field [stars: 5  takes: [stars: 'stars [integer!] "how many stars it shows"]]]
+    p: panels-of {rating "Rate" stars 3} ""
+    all [sketch-ok? p/1  has? p/1 "stars"  has? p/1 "3"]
+]
+"an icon is picked from those Trebol brings"
+[p: panels-of {button #star "Go"} ""  all [has? p/1 "Pick"  has? p/1 "#heart"]]
+"a view shows the words it takes before its faces: no text, no blocks, nothing it follows"
+[
+    d: design-of {view [width fill text "a"]}
+    p: props-code d first shown-faces d "" 'act
+    all [has? p/1 "Written"  has? p/1 "fill"  not has? p/1 "what it says"  not has? p/1 "Follows"  not has? p/1 "the faces it holds"]
+]
+"what a face does when clicked is among its events"
+[p: panels-of {button "Go" [go]} ""  all [has? p/3 "action"  has? p/3 "[go]"]]
+[d: design-of {view [text "a"]}  not has? events-code d first shown-faces d "" 'act "action"]
+"the word a face is set to, and global"
+[p: panels-of {who: text "a"} ""  all [has? p/1 "label"  has? p/1 {"who"}  has? p/1 "global"]]
+[d: design-of {view [text "a"]}  not has? first props-code d first shown-faces d "" 'act "global"]

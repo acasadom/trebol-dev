@@ -1,0 +1,37 @@
+Trebol [title: "Undo and redo of a file's texts" app: none]
+
+import %history.trb
+
+"undo and redo"
+[
+    h: new-history
+    remember h "a" "b"
+    remember h "b" "c"
+    all [
+        "b" = undo-text h "c"
+        "a" = undo-text h "b"
+        none? undo-text h "a"
+        "b" = redo-text h "a"
+        "c" = redo-text h "b"
+        none? redo-text h "c"
+    ]
+]
+[
+    ; a change after an undo forgets what was undone
+    h: new-history
+    remember h "a" "b"
+    undo-text h "b"
+    remember h "a" "x"
+    all [not can-redo? h  can-undo? h  "a" = undo-text h "x"]
+]
+[
+    ; the same text is no change
+    h: new-history
+    remember h "a" "a"
+    not can-undo? h
+]
+[
+    h: new-history
+    repeat i 250 [remember h form i form i + 1]
+    all [200 = length? h/past  "51" = first h/past]
+]

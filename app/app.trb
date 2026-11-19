@@ -1,0 +1,569 @@
+Trebol [
+    title: "Trebol designer"
+    description: "Lays out the screens of a Trebol project and writes the code back, as you wrote it."
+]
+
+; The designer of a project's screens. The file's text is the truth: every change, made on the
+; structure, the properties or the code itself, gives new text, and the design is read from it
+; again. Saving writes the text back through the file API of server/files.js.
+
+import %model.trb
+import %demo.trb
+import %palette.trb
+import %options.trb
+import %props.trb
+import %samples.trb
+import %history.trb
+import %move.trb
+import %trebol-code.js
+
+files: copy []
+path: none          ; the file being designed, from the project's folder
+text: ""            ; its text now
+saved: ""           ; its text as last read or saved
+d: none             ; the design read from text
+chosen: none        ; the index of the chosen face in shown-faces d
+problem: none       ; why the text does not load, when it does not
+demo: none          ; with no server: the files of the demo project, kept in the page
+demo-saved: none    ; and each as last downloaded
+prop-entries: []    ; the options the properties show, by the index their controls name
+props-query: ""     ; what the properties are narrowed to
+keep-props: false   ; a property being typed in: the panel stays, so the typing goes on
+histories: make map! []   ; each file's undo and redo, by its path: kept when another file is opened
+hist: none          ; the history of the file being designed
+
+; the file API answers only the designer's own pages, which say so with this header
+api-get: func [url] [fetch/with url [headers: [X-Trebol-Dev "1"]]]
+api-put: func [url content] [fetch/with url [method: 'PUT  body: content  headers: [X-Trebol-Dev "1"]]]
+
+read-files: function [] [
+    ; no file API answers on a web page: the demo project, saved by downloading
+    either error? r: try [api-get "/api/files"] [
+        set 'demo copy demo-files
+        set 'demo-saved copy demo-files
+        project-name/text: "demo: Save downloads the file"
+        set 'files sort keys-of demo
+    ] [
+        project-name/text: r/name
+        set 'files r/files
+    ]
+    file-choice/options: files
+    either empty? files [nothing/hidden: false] [open-file first files]
+]
+
+open-file: function [name [string!]] [
+    if all [path  text <> saved] [
+        ; the demo keeps the changes of a file left; a project's file is left only if the user says so
+        either demo [put demo path text] [
+            unless confirm/role rejoin [path " has changes that are not saved. Leave them?"] 'danger [
+                file-choice/value: path
+                exit
+            ]
+            ; its changes are left: so is what undoes them
+            put histories path new-history
+        ]
+    ]
+    set 'path name
+    file-choice/value: name
+    unless select histories name [put histories name new-history]
+    set 'hist select histories name
+    t: either demo [select demo name] [api-get rejoin ["/api/file?path=" enhex name]]
+    set 'saved either demo [select demo-saved name] [t]
+    set 'chosen none
+    ; another file: nothing of the last one's design stays, even when this one does not load
+    set 'd none
+    change-text t
+]
+
+save-file: function [] [
+    either demo [
+        put demo path text
+        put demo-saved path text
+        download last split path #"/" text
+    ] [
+        api-put rejoin ["/api/file?path=" enhex path] text
+    ]
+    set 'saved text
+    toast "Saved"
+    redraw
+]
+
+; New text, from any change: read it again; text that does not load keeps the last design.
+change-text: function [t [string!]] [
+    set 'text t
+    either error? e: try [design-of t] [
+        set 'problem form e/message
+    ] [
+        set 'problem none
+        set 'd e
+        ; the Add menu has the styles the file defines too
+        add-button/menu: get in first layout/only compose/only [button menu (palette-menu/own d/own)] 'menu
+        ; and the code colours them as styles: only when they change, as that lays the editor out anew
+        unless own-words = d/own [
+            set 'own-words copy d/own
+            w: copy code-words
+            foreach s d/own [put w s 'style]
+            code-view/props: make code-view/props [words: w]
+        ]
+    ]
+    redraw
+]
+
+; A change the person made: it can be undone. Opening a file, undo and redo change the text without one.
+write-text: function [t [string!]] [
+    if hist [remember hist text t]
+    change-text t
+]
+
+edit: function [t [string! none!]] [if t [write-text t]]
+
+undo-change: function [] [if all [hist  t: undo-text hist text] [change-text t]]
+redo-change: function [] [if all [hist  t: redo-text hist text] [change-text t]]
+
+; Ctrl+Z in the code: what was typed there and not yet read is a change first
+code-undo: function [typed what [word!]] [
+    if all [string? typed  typed <> text] [write-text typed]
+    either what = 'undo [undo-change] [redo-change]
+]
+
+; Ctrl+Z and Ctrl+Shift+Z or Ctrl+Y (Cmd on a Mac), unless pressed where the person types: a box undoes its own
+undo-key: function [e] [
+    if any [e/typing?  e/alt?  not any [e/ctrl?  e/meta?]] [exit]
+    case [
+        any [e/key = #"y"  all [e/key = #"z"  e/shift?]] [redo-change]
+        e/key = #"z" [undo-change]
+    ]
+]
+
+the-face: does [all [d chosen  pick shown-faces d chosen]]
+
+face-name: function [f] [
+    ; a screen: its name and title, home "Home"
+    if all [f/style = 'screen  r: written-range d f] [return rejoin ["screen " pick r/1 r/2 " " mold f/text]]
+    if piece? f [return rejoin [f/style " " mold f/text]]
+    s: form style-word d f
+    if l: face-label d f [s: rejoin [l ": " s]]
+    ; a grid says how it splits: grid 3, grid [1 2 1]
+    if all [f/style = 'grid  f/cols] [s: rejoin [s " " mold f/cols]]
+    if f/name [s: rejoin [s " " f/name]]
+    if string? f/text [
+        t: f/text
+        ; long texts are cut, so the structure stays narrow
+        if 20 < length? t [t: rejoin [copy/part t 19 "…"]]
+        s: rejoin [s " " mold t]
+    ]
+    s
+]
+
+; the structure: every face written in the file, nested as written
+nodes-of: function [fs [block!] all-faces [block!]] [
+    collect [
+        foreach f fs [
+            either n: find/same all-faces f [
+                node: make map! reduce ['id index? n 'name face-name f]
+                if kids: pane-of d f [
+                    node/children: nodes-of kids all-faces
+                    node/expanded: true
+                ]
+                keep node
+            ] [
+                if kids: pane-of d f [keep nodes-of kids all-faces]
+            ]
+        ]
+    ]
+]
+
+node-of: function [id list [block!]] [
+    unless id [return none]
+    foreach n list [
+        if n/id = id [return n]
+        if n/children [if found: node-of id n/children [return found]]
+    ]
+    none
+]
+
+redraw: function [] [
+    file-state/text: case [
+        problem ["Not saved: the code does not load"]
+        text = saved ["Saved"]
+        true ["Changed"]
+    ]
+    save-button/disabled: any [problem  text = saved  not path]
+    undo-button/disabled: not can-undo? hist
+    redo-button/disabled: not can-redo? hist
+    code-view/value: text
+    problem-text/hidden: not problem
+    problem-text/text: any [problem ""]
+    unless d [
+        ; a file opened that does not load: no structure, preview nor properties until it does
+        structure/data: copy []
+        preview/pane: copy []
+        problems/hidden: true
+        props/hidden: true
+        nothing-chosen/hidden: false
+        exit
+    ]
+    fs: shown-faces d
+    structure/data: collect [foreach l d/layouts [if l/view [keep nodes-of reduce [l/view] fs]]]
+    if all [chosen  chosen > length? fs] [set 'chosen none]
+    structure/selected: node-of chosen structure/data
+    show-screens
+    preview/pane: collect [foreach l d/layouts [if l/view [keep l/view/pane]]]
+    fill-samples preview/pane
+    ; every screen, not only the one on show: choosing a face on another shows it with its rows
+    foreach [f them] d/screens [fill-samples them]
+    mark-chosen
+    problems/data: collect [
+        foreach l d/layouts [foreach [p m] l/problems [keep make map! reduce ['at any [loaded-at p ""] 'message m]]]
+    ]
+    problems/hidden: empty? problems/data
+    problem-count/text: either empty? problems/data ["No problems"] [
+        rejoin [length? problems/data either 1 = length? problems/data [" problem"] [" problems"]]
+    ]
+    show-props
+]
+
+show-props: function [] [
+    f: the-face
+    props/hidden: not f
+    nothing-chosen/hidden: to logic! f
+    unless f [exit]
+    face-kind/text: face-name f
+    ; a view holds the rest: it is neither moved nor deleted
+    face-moves/hidden: to logic! layout-of d f
+    ; a screen is deleted, never moved: the first is the one an app starts on
+    move-up/hidden: move-down/hidden: to logic! find [screen tab step] f/style
+    ; a tab or a step has a label only: no options to find, no events
+    props-tab/hidden: props-find/hidden: to logic! piece? f
+    def: style-def-of d f
+    chain: copy []
+    while [def] [append chain form def/name  def: def/parent]
+    face-chain/text: form chain
+    either keep-props [set 'keep-props false] [fill-props]
+]
+
+; the controls of the chosen face's options or handlers, laid out anew from what its style takes
+fill-props: function [] [
+    unless f: the-face [exit]
+    either all [props-tab/value = "Events"  not piece? f] [
+        props-list/pane: layout/only events-code d f props-query 'prop-act
+    ] [
+        p: props-code d f props-query 'prop-act
+        set 'prop-entries p/2
+        props-list/pane: layout/only p/1
+    ]
+]
+
+; what a control of the properties did: the k-th option (a group of entries), or 0 for the
+; texts, what it follows and handlers
+prop-act: function [k [integer!] what [word!] value] [
+    g: either k > 0 [pick prop-entries k] [none]
+    if what = 'check [return either g [prop-check g value] [true]]
+    unless f: the-face [exit]
+    e: all [g  first g]
+    ; typing goes on in the control: the panel is laid out again only for a choice or a removal
+    if find [values code text hint is calc react event action label screen-name screen-title screen-args piece-label] what [set 'keep-props true]
+    ; a picked icon shows in the panel: laid out again
+    t: switch what [
+        flag [either value [set-option d f e none] [remove-option d f e]]
+        choice [set-option d f e reduce [to word! value]]
+        icon [prop-values f g mold to issue! form value]
+        custom [either value/2 [set-option/rule d f e none value/1] [remove-option/rule d f e value/1]]
+        values [prop-values f g value]
+        code [
+            either empty? trim copy value [remove-option d f e] [
+                b: attempt [load value]
+                either block? b [set-option d f e reduce [b]] [none]
+            ]
+        ]
+        remove [
+            either e/how = 'custom [
+                ; every rule of a program the face has goes
+                foreach w custom-rule-words [
+                    if option-of/rule face-parts d f e w [write-text remove-option/rule d f e w  f: the-face]
+                ]
+                none
+            ] [
+                q: group-part face-parts d f g
+                either q [remove-option d f q/2] [none]
+            ]
+        ]
+        text [set-face-text d f value]
+        hint [set-hint d f value]
+        is calc react [
+            b: attempt [load value]
+            set-reaction d f what either all [block? b  not empty? b] [b] [none]
+        ]
+        label [
+            w: all [string? value  not empty? trim copy value  attempt [load value]]
+            case [
+                none? w [set-face-label d f none]
+                word? w [set-face-label d f w]
+                true [none]
+            ]
+        ]
+        global [set-face-global d f value]
+        screen-name [w: attempt [load value]  either word? w [set-screen d f 'name w] [none]]
+        screen-title [set-screen d f 'title value]
+        screen-args [
+            w: attempt [load/all value]
+            either all [block? w  parse w [any word!]] [set-screen d f 'args w] [none]
+        ]
+        add-screen [add-screen d f]
+        piece-label [set-piece-label d f value]
+        add-piece [add-piece d f value]
+        action [
+            b: all [string? value  not empty? trim copy value  attempt [load value]]
+            set-action d f either all [block? b  not empty? b] [b] [none]
+        ]
+        event [
+            b: all [string? value/2  not empty? trim copy value/2  attempt [load value/2]]
+            either block? b [set-event d f value/1 b] [remove-event d f value/1]
+        ]
+    ]
+    either t [edit t] [set 'keep-props false]
+]
+
+; what is typed for an option, as the values of the entry of its group that takes them, or none
+typed-as: function [g [block!] value [string!]] [
+    vals: attempt [load/all value]
+    unless block? vals [return none]
+    foreach e g [
+        case [
+            find [name label] e/how [if all [1 = length? vals  word? first vals] [return reduce [e vals]]]
+            ; a block is typed as it is shown: [1 2 1]
+            e/how = 'block [if all [1 = length? vals  block? first vals] [return reduce [e vals]]]
+            true [
+                vs: vals
+                ; a text is typed as it is shown, with or without its quotes
+                if all [find e/args 'text  not string? first vals] [vs: reduce [value]]
+                if all [(length? vs) = length? e/args  args-take? e/args vs] [return reduce [e vs]]
+            ]
+        ]
+    ]
+    none
+]
+
+args-take?: function [args [block!] vals [block!]] [
+    repeat i length? args [
+        a: pick args i  v: pick vals i
+        ok: case [
+            a = 'text [any [string? :v  map? :v  lit-word? :v]]
+            'one-of = first a [all [word? :v  to logic! find either word? a/2 [get a/2] [a/2] v]]
+            true [
+                rule: copy []
+                foreach t a [unless empty? rule [append rule '|]  append rule t]
+                parse reduce [:v] rule
+            ]
+        ]
+        unless ok [return false]
+    ]
+    true
+]
+
+prop-check: function [g [block!] value] [
+    if any [not string? value  empty? trim copy value  typed-as g value] [return true]
+    m: copy ""
+    foreach e g [unless empty? m [append m " or "]  append m type-of-args e]
+    rejoin ["it takes " m]
+]
+
+; values typed for an option: written when they are what it takes, taken out when emptied
+prop-values: function [f g [block!] value [string!]] [
+    q: group-part face-parts d f g
+    if empty? trim copy value [return either q [remove-option d f q/2] [none]]
+    unless t: typed-as g value [return none]
+    e: t/1  vals: t/2
+    if e/how = 'name [return set-face-name d f first vals]
+    ; written in another of its ways: in place of it
+    either all [q  not same? q/2 e] [set-option/over d f e vals q/1] [set-option d f e vals]
+]
+
+; the loaded block that holds a box's faces
+; a screens face shows one screen: the one the chosen face is on, or its first; tabs and steps
+; show the tab or step the chosen face is on
+show-screens: function [] [
+    c: the-face
+    foreach [f them] d/screens [
+        on: first them
+        foreach s them [if all [c  any [same? s c  inside? d c s]] [on: s]]
+        unless all [block? f/pane  1 = length? f/pane  same? on first f/pane] [f/pane: either on [reduce [on]] [copy []]]
+    ]
+    unless c [exit]
+    foreach f faces-of d [
+        if all [find [tabs steps] f/style  block? f/pane] [
+            repeat i length? f/pane [
+                p: pick f/pane i
+                if all [any [same? p c  inside? d c p]  f/value <> i] [f/value: i]
+            ]
+        ]
+    ]
+]
+
+choose-face: function [id] [
+    set 'chosen id
+    show-screens
+    structure/selected: node-of chosen structure/data
+    mark-chosen
+    show-props
+]
+
+; the chosen face, marked in the preview and in the code
+mark-chosen: function [] [
+    f: the-face
+    preview/selected: f
+    s: all [f  face-span d f]
+    code-view/props: make code-view/props [mark: either s [reduce [s/x s/y]] [none]]
+]
+
+; a face clicked in the preview
+pick-face: function [f [object!]] [
+    if n: find/same shown-faces d f [choose-face index? n]
+]
+
+; the cursor put in the code: the innermost face written around it
+caret-at: function [at [integer!]] [
+    unless d [exit]
+    best: none
+    n: 0
+    foreach f shown-faces d [
+        n: n + 1
+        if all [s: face-span d f  at >= s/x  at <= (s/x + s/y)] [
+            if any [not best  s/y <= best/2] [best: reduce [n s/y]]
+        ]
+    ]
+    if all [best  best/1 <> chosen] [choose-face best/1]
+]
+
+; Design, Split or Code: what the middle shows
+show-mode: function [m] [
+    preview-pane/hidden: m = "Code"
+    code-pane/hidden: m = "Design"
+    centre/cols: either m = "Split" [[1 1]] [[1]]
+]
+
+; the code view colours the dialect's words: styles, and the words that change them
+code-words: make map! []
+own-words: []
+foreach w ui-dialect-words [put code-words w either select styles w ['style] ['flag]]
+
+; up or down: past the face beside it, into a box beside it, or out of its box
+step-face: function [by [integer!]] [
+    unless all [f: the-face  m: move-step d f by] [exit]
+    edit m/1
+    set 'chosen m/2
+    redraw
+]
+
+; a row dragged in the structure: its face goes where it was dropped among its siblings
+reorder: function [parent from [integer!] to [integer!]] [
+    list: either parent [parent/children] [structure/data]
+    ; the tree has moved the row already: it is at to, and the one it went beside next to it
+    a: pick list to
+    b: pick list either to > from [to - 1] [to + 1]
+    fs: shown-faces d
+    place-face (pick fs a/id) reduce [either to > from ['after] ['before] pick fs b/id]
+]
+
+; a row dragged to another level of the structure: before the row it was dropped above, or the last of its box
+drop-face: function [node parent index [integer!]] [
+    unless parent [redraw  exit]
+    fs: shown-faces d
+    kids: any [parent/children []]
+    place-face (pick fs node/id) either index <= length? kids [
+        reduce ['before pick fs kids/:index/id]
+    ] [
+        reduce ['into pick fs parent/id]
+    ]
+]
+
+place-face: function [f where [block!]] [
+    either m: move-to d f where [edit m/1  set 'chosen m/2] [none]
+    ; a move that cannot be made puts the row back
+    redraw
+]
+
+; an item of the Add menu: inside the chosen face if it holds faces, else after it
+add-face: function [item [word!]] [
+    unless code: palette-code item [exit]
+    f: the-face
+    ; what is added is chosen: it comes right after the faces of the one it goes in or after
+    at: none
+    t: case [
+        all [f  b: pane-block d f] [at: chosen + 1 + count-inside d f  insert-into d b code]
+        f [at: chosen + 1 + count-inside d f  insert-after d f code]
+        all [not empty? d/layouts  v: d/layouts/1/view] [
+            at: 1 + count-inside d v
+            insert-into d d/layouts/1/block code
+        ]
+    ]
+    unless t [exit]
+    edit t
+    if all [at  not problem  pick shown-faces d at] [choose-face at]
+]
+
+; the Add menu comes from the palette
+view compose/deep/only [
+    width fill
+    on-key [undo-key event]
+    row spread middle [
+        row middle [
+            title "Trebol designer"
+            global project-name: text muted ""
+            global file-choice: choice "File" [] on-change [if value [open-file value]]
+        ]
+        global mode-f: radio mode "View" ["Design" "Split" "Code"] segmented on-change [show-mode value]
+        row middle [
+            global file-state: text muted ""
+            global undo-button: button #undo "Undo" disabled [undo-change]
+            global redo-button: button #redo "Redo" disabled [redo-change]
+            global save-button: button #check "Save" primary [save-file]
+        ]
+    ]
+    global nothing: text muted hidden "This project has no .trb files yet."
+    grid fit [small 1 medium] resize [
+        panel "Structure" pad 2 [
+            global add-button: button #plus "Add" small menu (palette-menu) on-menu [add-face event/picked]
+            global structure: tree [name] reorder drop on-select [choose-face row/id]
+                on-reorder [reorder event/parent event/from event/to]
+                on-drop [drop-face event/dropped event/parent event/index]
+        ]
+        global centre: grid fit [1 1] [
+            global preview-pane: panel "Preview" [
+                global device-f: radio "Screen" ["Desktop" "Tablet" "Phone"] segmented on-change [
+                    frame/screen: select ["Desktop" 1280x800 "Tablet" 834x1112 "Phone" 390x844] value
+                ]
+                global frame: device desktop fit [
+                    global preview: column inert on-select [pick-face event/face] []
+                ]
+                global problems: table [at "Where" message "Problem"] hidden
+            ]
+            global code-pane: panel "Code" pad 2 [
+                global problem-text: text danger hidden ""
+                global code-view: widget <trebol-code> fit [words: code-words mark: none] on-change [write-text value]
+                    on-caret [caret-at event/detail] on-undo [code-undo event/detail 'undo] on-redo [code-undo event/detail 'redo]
+            ]
+        ]
+        panel "Properties" pad 4 [
+            global nothing-chosen: text muted "Choose a face in the structure, the preview or the code."
+            global props: column hidden [
+                global face-kind: code ""
+                global face-chain: text small muted ""
+                global props-tab: radio "Show" ["Options" "Events"] segmented on-change [fill-props]
+                global props-find: field "Find an option" on-change [set 'props-query any [value ""]  fill-props]
+                global props-list: column []
+                global face-moves: row [
+                    global move-up: button #arrow-up "Up" [step-face -1]
+                    global move-down: button #arrow-down "Down" [step-face 1]
+                    button #trash "Delete" danger [edit remove-face d the-face  set 'chosen none  redraw]
+                ]
+            ]
+        ]
+    ]
+    global problem-count: text muted small "No problems"
+]
+
+mode-f/value: "Split"
+props-tab/value: "Options"
+device-f/value: "Desktop"
+read-files

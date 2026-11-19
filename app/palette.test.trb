@@ -1,0 +1,30 @@
+Trebol [title: "The Add menu: every item loads with no problem" app: none]
+
+import %palette.trb
+import %model.trb
+
+"every item of the Add menu is code that loads, a face with no problem"
+[
+    bad: copy []
+    foreach [group items] palette [
+        foreach [w label code] items [
+            r: ui-sketch load rejoin ["view [" code "]"]
+            unless all [r/1  empty? r/2  1 = length? r/1/pane] [append bad w]
+        ]
+    ]
+    empty? bad
+]
+"every style of the dialect is in it"
+[
+    have: copy []
+    foreach [group items] palette [foreach [w label code] items [append have first to block! code]]
+    missing: exclude words-of styles have
+    ; screen is made by screens, tab and step are made by tabs and steps, entry by rows, backdrop goes behind a box, widget needs a page's JavaScript, orbit a graph of data
+    empty? exclude missing [screen tab step entry backdrop widget orbit view]
+]
+"the styles a file defines are in the Add menu"
+[
+    d: design-of {stylize [note: text [role: 'muted]  box: panel []]  view [note "a"]}
+    m: palette-menu/own d/own
+    all [find m "This file"  "note []" <> palette-code 'note  "box []" = palette-code 'box  "note" = palette-code 'note]
+]

@@ -1,0 +1,304 @@
+Trebol [
+    title: "The properties of a face: one control for each option its style takes, and its handlers"
+    exports: [props-code events-code prop-written? event-help type-of-args]
+]
+
+import %model.trb
+import %options.trb
+
+; The panel is laid out anew for each face from what its style takes, so a style that a package
+; defines shows its options as Trebol's own do. Each control's action calls act, a word of the
+; app, with the index of its option in the list given back and what to do:
+;   act k 'flag true        a flag or a rule with no values on (false: off)
+;   act k 'values "2 40"    the values of a keyword, rule or bare value, as typed
+;   act k 'choice "bar"     one of a list
+;   act k 'code "[...]"     a block, as typed
+;   act k 'custom [w true]  a rule a program adds, on or off
+;   act k 'remove none      out of the code
+;   act k 'icon 'heart      an icon picked
+;   act k 'check "2 x"      whether what is typed is what it takes: true, or what is wrong
+; and the texts, what it follows and its handlers: act 0 'text "x", act 0 'hint "x",
+; act 0 'is "[...]", act 0 'react "[...]", act 0 'event [on-change "[...]"].
+
+event-help: make map! [
+    on-back "the browser's Back was pressed"
+    on-change "its value changed"
+    on-close "it was closed"
+    on-dbl-click "clicked twice"
+    on-drop "something was dropped on it"
+    on-end "it reached its end"
+    on-enter "Enter was pressed in it"
+    on-expand "a row of it was opened"
+    on-find "something was asked for in the palette"
+    on-focus "it took the focus"
+    on-key "a key was pressed while it has the focus"
+    on-leave "the screen is left"
+    on-menu "its context menu was asked for"
+    on-over "the pointer is over it"
+    on-reorder "its children or rows were moved"
+    on-search "something was typed to search"
+    on-select "it or one of its rows was chosen"
+    on-sort "its rows were sorted"
+    on-unfocus "it lost the focus"
+]
+
+prop-written?: function ["Whether a face has an option: the part that took it, or none" parts [block!] e [object!]] [
+    option-of parts e
+]
+
+type-of-args: function ["What an option takes, as the reference says it: integer! integer!, or one of a list" e [object!]] [
+    if find [name label] e/how [return "word"]
+    if e/how = 'block [return "block!"]
+    out: copy []
+    foreach a e/args [
+        append out case [
+            a = 'text ["text"]
+            'one-of = first a [rejoin ["one of " form either word? a/2 [get a/2] [a/2]]]
+            true [form a]
+        ]
+    ]
+    form out
+]
+
+; the words a block of a property is coloured with: none, the small editor colours Trebol alone
+choices-of: func [a] [either word? a/2 [get a/2] [a/2]]
+one-of-arg: func [e] [all [1 = length? e/args  block? first e/args  'one-of = first first e/args  first e/args]]
+block-arg?: func [e] [all [1 = length? e/args  block? first e/args  find first e/args 'block!]]
+
+matches?: function [e query [string!]] [
+    any [
+        empty? query
+        find form any [e/kw  e/field] query
+        all [e/help  find e/help query]
+    ]
+]
+
+; a control for entry e, the k-th of the list, given what the face has of it
+control-of: function [g [block!] k [integer!] has vals act [word!] words] [
+    e: first g
+    ; an option written in more than one way, grid 3 or grid [1 2 1]: typed, as any of them
+    if 1 < length? g [
+        hint: copy ""
+        foreach x g [unless empty? hint [append hint " or "]  append hint type-of-args x]
+        label: form either set-word? e/field [to word! e/field] [e/field]
+        shown: either has [mold/only vals] [""]
+        if all [has  1 = length? vals  block? first vals] [shown: mold first vals]
+        return compose/deep [field (label) (hint) with [value: (shown)] check [(act) (k) 'check value] on-change [(act) (k) 'values value]]
+    ]
+    label: form any [e/kw  if e/how = 'label ['label]  either set-word? e/field [to word! e/field] [e/field]]
+    help: any [e/help ""]
+    shown: either has [mold/only vals] [""]
+    switch/default e/how [
+        flag [compose/deep [check (label) with [value: (to logic! has)] on-change [(act) (k) 'flag value]]]
+        custom [
+            out: copy []
+            foreach w custom-rule-words [
+                on: to logic! all [has  find vals w]
+                append out compose/deep [check (form w) with [value: (on)] on-change [(act) (k) 'custom reduce [(to lit-word! w) value]]]
+            ]
+            either empty? out [[text small muted "No program here adds a rule."]] [out]
+        ]
+        block [compose/deep [
+            text small (label)
+            widget <trebol-code-small> [] with [value: (either has [mold first vals] [""])] on-change [(act) (k) 'code value]
+        ]]
+        name label [compose/deep [field (label) "word" with [value: (shown)] check [(act) (k) 'check value] on-change [(act) (k) 'values value]]]
+    ] [
+        ; rule with no values: on or off
+        if all [e/how = 'rule  empty? e/args] [
+            return compose/deep [check (label) with [value: (to logic! has)] on-change [(act) (k) 'flag value]]
+        ]
+        if a: one-of-arg e [
+            cs: collect [foreach c choices-of a [keep form c]]
+            v: either has [form first vals] [none]
+            ; joined buttons while they fit the panel, a choice otherwise
+            return either all [3 >= length? cs  16 >= length? rejoin cs] [
+                compose/deep [text small (label) radio (label) [(cs)] segmented with [value: (v)] on-change [(act) (k) 'choice value]]
+            ] [
+                compose/deep [choice (label) [(cs)] with [value: (v)] on-change [if value [(act) (k) 'choice value]]]
+            ]
+        ]
+        ; an icon: typed, or picked from those Trebol brings
+        if all [1 = length? e/args  [issue!] = first e/args] [
+            items: collect [foreach w ui-icons [keep to issue! form w  keep form w  keep w]]
+            return compose/deep [
+                row middle [
+                    field (label) "#icon" fill with [value: (shown)] check [(act) (k) 'check value] on-change [(act) (k) 'values value]
+                    button (either all [has  issue? first vals] [first vals] [#search]) "Pick" small menu [(items)] on-menu [(act) (k) 'icon event/picked]
+                ]
+            ]
+        ]
+        if block-arg? e [
+            return compose/deep [
+                text small (label)
+                widget <trebol-code-small> [] with [value: (either has [mold first vals] [""])] on-change [(act) (k) 'code value]
+            ]
+        ]
+        compose/deep [field (label) (type-of-args e) with [value: (shown)] check [(act) (k) 'check value] on-change [(act) (k) 'values value]]
+    ]
+]
+
+; a part of the panel: a line, its title, then its controls
+section: func [title [string!] body [block!]] [compose/deep [divider text small muted (title) column gap 2 [(body)]]]
+
+props-code: function [
+    "The layout of a face's options, and the entries its controls name by index: [code entries]"
+    d [object!] f [object!] query [string!] act [word!]
+] [
+    ; a tab or a step: its label, and another after it; its block holds only faces
+    if piece? f [
+        kind: f/style
+        return reduce [compose/deep [
+            divider text small muted (either kind = 'tab ["Tab"] ["Step"]) column gap 2 [
+                field "label" "what it is called" with [value: (form f/text)] on-change [(act) 0 'piece-label value]
+                button #plus (either kind = 'tab ["Add a tab"] ["Add a step"]) small [(act) 0 'add-piece (to lit-word! kind)]
+            ]
+        ] copy []]
+    ]
+    if find [tabs steps] f/style [extra: compose/deep [
+        button #plus (either f/style = 'tabs ["Add a tab"] ["Add a step"]) small [(act) 0 'add-piece (to lit-word! either f/style = 'tabs ['tab] ['step])]
+    ]]
+    def: style-def-of d f
+    parts: face-parts d f
+    r: face-range d f
+    ; a view's words come before its faces: neither blocks, texts nor what it follows are among them
+    view?: to logic! own-block d f
+    entries: copy []
+    written: copy []
+    groups: copy []
+    rows: option-rows def
+    foreach [style gs] rows [
+        g: copy []
+        foreach grp gs [
+            e: first grp
+            if all [
+                any collect [foreach x grp [keep matches? x query]]
+                not all [view?  e/how = 'block]
+            ] [
+                append/only entries grp
+                k: length? entries
+                p: either e/how = 'custom [none] [all [q: group-part parts grp  first q]]
+                if all [e/how = 'custom] [
+                    ; every custom rule the face has
+                    ws: collect [foreach q parts [if all [q/what = 'entry  q/e  q/e/how = 'custom] [keep q/word]]]
+                    p: either empty? ws [none] [ws]
+                ]
+                vals: case [
+                    block? p [p]
+                    p [row-values d f p]
+                    true [none]
+                ]
+                c: control-of grp k to logic! p vals act none
+                help: any [e/help ""]
+                either p [
+                    append written compose/deep [
+                        row middle [column fill gap 0 [(c) text small muted (help)] button #close "" small [(act) (k) 'remove none]]
+                    ]
+                ] [
+                    append g compose/deep [column gap 0 [(c) text small muted (help)]]
+                ]
+            ]
+        ]
+        unless empty? g [append groups section (rejoin [form style either style = def/name [" · its own"] [""]]) g]
+    ]
+    code: copy []
+    ; what it says and what it follows: every face has them
+    t: none  h: none
+    foreach q parts [
+        if q/what = 'text [t: pick r/1 q/from]
+        if q/what = 'hint [h: pick r/1 q/from]
+    ]
+    ; a screen: its name, title and arguments, written before its block
+    if all [f/style = 'screen  r2: written-range d f] [
+        b: r2/1  i: r2/2
+        args: either r2/3 = (i + 3) [form pick b i + 2] [""]
+        append code compose/deep [
+            divider text small muted "Screen" column gap 2 [
+                field "screen name" "word" with [value: (form pick b i)] on-change [(act) 0 'screen-name value]
+                field "title" "what the window is called" with [value: (form pick b i + 1)] on-change [(act) 0 'screen-title value]
+                field "arguments" "words, as id: client/42 gives id 42" with [value: (args)] on-change [(act) 0 'screen-args value]
+                button #plus "Add a screen" small [(act) 0 'add-screen none]
+            ]
+        ]
+    ]
+    if f/style = 'screens [append code compose/deep [button #plus "Add a screen" small [(act) 0 'add-screen none]]]
+    ; the word code names it with: who: field, global for every script
+    if all [not view?  any [empty? query  find "label global word" query]] [
+        l: face-label d f
+        g: 'global = pick r/1 r/2
+        append code compose/deep [
+            divider text small muted "Label" column gap 2 [
+                row middle [
+                    field "label" "word" fill with [value: (either l [form l] [""])] on-change [(act) 0 'label value]
+                    check "global" with [value: (g)] on-change [(act) 0 'global value]
+                ]
+                text small muted "the word code names it with: who: field; global, for every script"
+            ]
+        ]
+    ]
+    if all [not view?  any [empty? query  find "text hint" query]] [
+        append code compose/deep [
+            divider text small muted "Text" column gap 2 [
+                field "text" "what it says" with [value: (either string? t [t] [""])] on-change [(act) 0 'text value]
+                field "hint" "shown while it is empty" with [value: (either string? h [h] [""])] on-change [(act) 0 'hint value]
+            ]
+        ]
+    ]
+    if extra [append code extra]
+    unless empty? written [append code section "Written · in the code now" written]
+    append code groups
+    if all [not view?  any [empty? query  find "is react calc follows" query]] [
+        fs: copy []
+        foreach kind [is calc react] [
+            v: none
+            foreach q parts [if all [q/what = 'reaction  q/word = kind] [v: pick r/1 q/to]]
+            append fs compose/deep [
+                text small (form kind)
+                widget <trebol-code-small> [] with [value: (either v [mold v] [""])] on-change [(act) 0 (to lit-word! kind) value]
+            ]
+        ]
+        append code compose/deep [divider text small muted "Follows other faces" column gap 2 [(fs) text small muted "is: its value is what the block gives, each time what it reads changes; calc: the same, and it cannot be typed in; react: runs again each time"]]
+    ]
+    reduce [code entries]
+]
+
+events-code: function [
+    "The layout of a face's handlers: one for each event its style fires, written ones with their block"
+    d [object!] f [object!] query [string!] act [word!]
+] [
+    if piece? f [return [text muted "A tab or a step has no events of its own: its faces do."]]
+    def: style-def-of d f
+    parts: face-parts d f
+    r: face-range d f
+    have: copy []
+    foreach q parts [if q/what = 'event [append have reduce [q/word pick r/1 q/to]]]
+    evs: either block? def/events [copy def/events] [copy []]
+    ; a style told any event fires what it is given: those written, then any of the dialect
+    if def/events = 'any [evs: union extract have 2 keys-of event-help]
+    ; those it has first
+    evs: union intersect evs extract have 2 evs
+    code: copy []
+    ; what it does when clicked: the block after it; a view's words have none
+    if all [not own-block d f  any [empty? query  find "action click" query]] [
+        a: none
+        foreach q parts [if q/what = 'action [a: pick r/1 q/from]]
+        append code compose/deep [
+            row middle spread [text "action" (either a [compose/deep [button #close "" small [(act) 0 'action none]]] [[]])]
+            widget <trebol-code-small> [] with [value: (either a [mold a] [""])] on-change [(act) 0 'action value]
+            text small muted "the block after it: runs when it is clicked"
+        ]
+    ]
+    foreach ev evs [
+        if any [empty? query  find form ev query] [
+            b: select have ev
+            help: any [select event-help ev ""]
+            append code compose/deep [
+                row middle spread [text (form ev) (either b [compose/deep [button #close "" small [(act) 0 'event reduce [(to lit-word! ev) none]]]] [[]])]
+                widget <trebol-code-small> [] with [value: (either b [mold b] [""])] on-change [(act) 0 'event reduce [(to lit-word! ev) value]]
+                text small muted (help)
+            ]
+        ]
+    ]
+    if empty? code [code: [text muted "No event matches."]]
+    code
+]

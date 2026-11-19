@@ -1,0 +1,129 @@
+Trebol [
+    title: "Moving a face: beside another anywhere in the file, or into a box; and a step up or down that goes in and out of boxes"
+    exports: [boxes pane-block count-inside move-to move-step]
+]
+
+; A move gives new text and where the face moved is in the structure afterwards (its index in
+; shown-faces). The face's code goes with its comment; its lines are indented as the place it goes.
+
+import %model.trb
+import %options.trb
+
+; the styles whose block holds faces: what is added with one of them chosen goes inside it
+boxes: [view row column panel form grid scroll dialog device]
+
+pane-block: function ["The block a face's faces are written in, or none: a view's, a screen's, a box's, a rows' template" d [object!] f [object!]] [
+    if b: own-block d f [return b]
+    ; rows: the faces of one row, its template
+    if f/style = 'rows [
+        r: face-range d f
+        foreach p face-parts d f [
+            if all [p/what = 'block  p/e/field = first [template:]] [return pick r/1 p/from]
+        ]
+    ]
+    unless all [find boxes f/style  r: face-range d f] [return none]
+    b: pick r/1 r/3
+    either block? b [b] [none]
+]
+
+count-inside: function ["How many faces of the structure a face holds" d [object!] f [object!]] [
+    n: 0
+    ; as the structure lists them: every face written, and those inside one that is not, as the entry of rows
+    foreach g any [pane-of d f []] [n: n + (either face-range d g [1] [0]) + count-inside d g]
+    n
+]
+
+; a face that can move: written, and not a view, a screen, a tab or a step
+movable?: function [d f] [all [f  face-range d f  not own-block d f]]
+
+; the faces written in the same block as a face, in order
+siblings: function [d f] [
+    r: face-range d f
+    collect [foreach g shown-faces d [if all [movable? d g  q: face-range d g  same? head q/1 head r/1] [keep g]]]
+]
+
+; the face whose faces it is one of
+holder: function [d f] [
+    r: face-range d f
+    foreach g shown-faces d [if all [b: pane-block d g  same? head b head r/1] [return g]]
+    none
+]
+
+; the code of a face, its comment too, its lines after the first a step out of where it is written
+code-of: function [d f] [
+    s: face-span d f
+    code: copy/part at d/text s/x (after-line d/text s/x + s/y) - s/x
+    replace/all code rejoin [newline indent-at d/text s/x] newline
+]
+
+move-to: function [
+    "New text and the face's index in shown-faces after moving it: where is [before g], [after g] or [into g]; none when it cannot go there"
+    d [object!] f [object!] where [block!]
+] [
+    how: where/1
+    g: where/2
+    unless all [movable? d f  g  not same? f g  not inside? d g f] [return none]
+    if find [before after] how [unless movable? d g [return none]]
+    if how = 'into [unless b: pane-block d g [return none]]
+    s: face-span d f
+    code: code-of d f
+    t: face-span d g
+    ; the new text with the code where it goes, and where that is
+    switch how [
+        before [
+            indent: indent-at d/text t/x
+            ip: t/x
+            new: splice d/text ip 0 rejoin [replace/all copy code newline rejoin [newline indent]  newline indent]
+        ]
+        after [
+            ip: t/x + t/y
+            new: insert-after d g code
+        ]
+        into [
+            o: block-span d b
+            ip: o/x + o/y - 1
+            ; already the last of its block: nowhere to go
+            r: face-range d f
+            if all [same? head r/1 head b  r/3 = length? b] [return none]
+            new: insert-into d b code
+        ]
+    ]
+    unless new [return none]
+    ; the face goes from where it was: later in the text it moved by what was put before it
+    unless ip > s/x [s: as-pair s/x + (length? new) - (length? d/text) s/y]
+    new: cut new s
+    ; where it is in the structure now: where it went among the faces, those it held left out
+    fs: shown-faces d
+    there: index? find/same fs g
+    pos: switch how [
+        before [there]
+        after [there + 1 + count-inside d g]
+        into [there + 1 + count-inside d g]
+    ]
+    was: index? find/same fs f
+    reduce [new  either pos > was [pos - 1 - count-inside d f] [pos]]
+]
+
+move-step: function [
+    "New text and index after a step up (by -1) or down (by 1): past the face beside it, into a box beside it, or out of its box; none when it cannot"
+    d [object!] f [object!] by [integer!]
+] [
+    unless movable? d f [return none]
+    sib: siblings d f
+    n: index? find/same sib f
+    next-one: pick sib n + by
+    if all [by < 0  n = 1] [next-one: none]
+    either next-one [
+        either pane-block d next-one [
+            ; a box beside it: in as its first face going down, as its last going up
+            inner: collect [foreach g shown-faces d [if all [q: face-range d g  same? head q/1 head pane-block d next-one  movable? d g] [keep g]]]
+            either all [by > 0  not empty? inner] [move-to d f reduce ['before first inner]] [move-to d f reduce ['into next-one]]
+        ] [
+            move-to d f reduce [either by > 0 ['after] ['before] next-one]
+        ]
+    ] [
+        ; the first or last of its box: out of it, beside it
+        unless all [h: holder d f  movable? d h] [return none]
+        move-to d f reduce [either by > 0 ['after] ['before] h]
+    ]
+]

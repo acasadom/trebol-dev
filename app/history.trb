@@ -1,0 +1,43 @@
+Trebol [
+    title: "Undo and redo: the texts a file had, before and after the one it has now"
+    exports: [new-history remember undo-text redo-text can-undo? can-redo?]
+]
+
+; Every change gives a file new text, so going back is taking the text it had before. A history keeps,
+; for one file, the texts before the one now (past, the last is the newest) and those undone (future,
+; the last is the next to come back). A new change after an undo forgets what was undone.
+
+history-size: 200   ; the oldest texts go past this many
+
+new-history: does [make object! [past: copy []  future: copy []]]
+
+remember: function [
+    "Keeps the text a file had before a change"
+    h [object!]  was [string!]  now [string!]
+] [
+    if was == now [exit]
+    append h/past was
+    if history-size < length? h/past [remove h/past]
+    clear h/future
+]
+
+undo-text: function [
+    "The text before the one now, which is kept to come back by redo; none when there is none"
+    h [object!]  now [string!]
+] [
+    if empty? h/past [return none]
+    append h/future now
+    take/last h/past
+]
+
+redo-text: function [
+    "The text undone last, the one now kept to go back to again; none when there is none"
+    h [object!]  now [string!]
+] [
+    if empty? h/future [return none]
+    append h/past now
+    take/last h/future
+]
+
+can-undo?: function [h] [all [h  not empty? h/past]]
+can-redo?: function [h] [all [h  not empty? h/future]]

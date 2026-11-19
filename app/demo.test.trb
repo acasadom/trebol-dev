@@ -1,0 +1,16 @@
+Trebol [title: "The designer as a demo, on a page with no file API" app: %app.trb]
+
+serve [GET "/api/files" [reply 404 "Not found"]]
+
+"the demo project"
+[see "demo: Save downloads the file"  see {title "Bike workshop"}  see {booking: panel "Book a repair"}]
+[
+    click {field name "Your name"}
+    type "Text" "Name"
+    see "Changed"
+    choose "File" "contact.trb"
+    see {heading "Write to us"}
+    choose "File" "app.trb"
+    see {field name "Name"}
+    see "Changed"
+]

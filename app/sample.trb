@@ -1,0 +1,16 @@
+Trebol [title: "A sample for the tests of the model" exports: [sample]]
+
+; what the tests edit; the comments must survive every edit
+sample: {Trebol [title: "Signup"]
+
+; who signs up
+view [
+    heading "Join us"
+    who: field name "Name" required  ; theirs
+    field email "Email"
+    row [
+        button "Save" [save-it]
+        button "Back"
+    ]
+]
+}

@@ -1,0 +1,404 @@
+Trebol [
+    title: "What each value a face was written with is, read from what its style takes, and the edits of its options"
+    exports: [
+        style-def-of face-parts option-rows option-of group-part row-values custom-rule-words
+        set-option remove-option set-event remove-event set-reaction set-hint set-action
+        insert-option-at values-span
+    ]
+]
+
+import %model.trb
+
+; Every style says what it takes (takes: in its definition, read into ui-style-defs), so the
+; designer reads a face the way layout does: after its style, each value is tried against the
+; entries that start with a word, then against those of a type; strings are its text and hint,
+; on-xxx blocks its handlers, is, calc and react what it follows, and blocks go in turn to the
+; entries that take one, the last being its action. Nothing here names a style: a style a
+; package defines is read and edited the same.
+
+part: make object! [
+    what: none      ; global label style name entry text hint event reaction block action computed stray
+    e: none         ; the take-entry of an entry or block
+    word: none      ; the event, or is calc react, or the custom rule
+    from: none      ; the first index in the face's loaded block
+    to: none        ; the last
+]
+
+style-def-of: function ["The definition of the style a face was written with" d [object!] f [object!]] [
+    w: style-word d f
+    any [select d/defs w  select ui-style-defs w  select ui-style-defs f/style]
+]
+
+; the words that start an entry of a definition, and the words of its one-of lists
+entry-words: function [def] [
+    out: copy []
+    foreach e def/entries [
+        if e/kw [append out e/kw]
+        foreach a e/args [if all [block? a  'one-of = first a] [append out choices-of a]]
+    ]
+    unique out
+]
+
+choices-of: func [a] [either word? a/2 [get a/2] [a/2]]
+
+custom-rule-words: function ["The rules programs and packages added with rule"] [
+    taken: copy words-of styles
+    foreach n keys-of ui-style-defs [append taken entry-words select ui-style-defs n]
+    append taken [global required react is calc later]
+    exclude ui-dialect-words taken
+]
+
+event-word?: func [w] [all [word? :w  "on-" = copy/part form w 3]]
+
+; A word right after the style names the field or labels the face when it is no word of the style
+name-word?: function [def w customs] [
+    not any [
+        not word? :w
+        event-word? w
+        find [global required react is calc] w
+        all [any [find entry-words def w  find customs w]  not find [email url integer] w]
+    ]
+]
+
+arg-at?: function [a b [block!] i [integer!]] [
+    if i > length? b [return false]
+    v: pick b i
+    case [
+        ; compose puts a value there when the screen is shown
+        paren? :v [true]
+        a = 'text [any [string? :v  map? :v  lit-word? :v]]
+        'one-of = first a [all [word? :v  to logic! find choices-of a v]]
+        true [
+            rule: copy []
+            foreach t a [unless empty? rule [append rule '|]  append rule t]
+            parse copy/part at b i 1 rule
+        ]
+    ]
+]
+
+; where entry e, tried at index i of b, ends; none when what is there is not its
+take-at: function [e b [block!] i [integer!] last-i [integer!] customs] [
+    w: pick b i
+    switch e/how [
+        flag [return all [word? :w  w = e/kw  i]]
+        custom [return all [word? :w  find customs w  i]]
+        name label block [return none]
+    ]
+    k: i
+    ; a value compose puts in is taken only after a word that starts an entry, as layout reads it
+    if all [e/how = 'value  paren? :w] [return none]
+    if find [keyword rule] e/how [
+        unless all [word? :w  w = e/kw] [return none]
+        k: i + 1
+    ]
+    foreach a e/args [
+        unless all [k <= last-i  arg-at? a b k] [return none]
+        k: k + 1
+    ]
+    k - 1
+]
+
+one-of-value?: func [e] [all [e/how = 'value  block? first e/args  'one-of = first first e/args]]
+
+; Whether entry x, a block's, took a block of face f: its function may say no, as grid's weights
+; do to the faces' block, so the face as layout read it says: the field changed, and no value of
+; another entry had filled it.
+block-took?: function [def f x parts] [
+    unless x/fn [return true]
+    unless set-word? x/field [return true]
+    w: to word! x/field
+    foreach p parts [if all [p/e  p/e/field = x/field] [return false]]
+    v: select f w
+    not any [none? :v  same? :v select def/proto w]
+]
+
+face-parts: function [
+    "The parts of what a face was written with, in order: what each is and where it sits in its loaded block"
+    d [object!] f [object!]
+] [
+    r: face-range d f
+    b: r/1  i: r/2  z: r/3
+    def: style-def-of d f
+    customs: custom-rule-words
+    out: copy []
+    add-part: func [what from to /with e word] [
+        p: make part []
+        p/what: what  p/from: from  p/to: to  p/e: e  p/word: word
+        append out p
+    ]
+    ; a view has no word of its own: its words start its block
+    unless own-block d f [
+        if 'global = pick b i [add-part 'global i i  i: i + 1]
+        if set-word? pick b i [add-part 'label i i  i: i + 1]
+        add-part 'style i i  i: i + 1
+    ]
+    foreach e def/entries [
+        if all [e/lead  i <= z] [
+            w: pick b i
+            case [
+                find [name label] e/how [if name-word? def :w customs [add-part/with e/how i i e none  i: i + 1]]
+                q: take-at e b i z customs [add-part/with 'entry i q e none  i: q + 1]
+            ]
+        ]
+    ]
+    texts: 0
+    blocks: copy []
+    while [i <= z] [
+        v: pick b i
+        q: none
+        foreach e def/entries [
+            if all [not q  not e/lead  any [e/how <> 'value  one-of-value? e]] [
+                if q: take-at e b i z customs [add-part/with 'entry i q e (all [e/how = 'custom  v])]
+            ]
+        ]
+        unless q [foreach e def/entries [
+            if all [not q  not e/lead  e/how = 'value] [if q: take-at e b i z customs [add-part/with 'entry i q e none]]
+        ]]
+        unless q [case [
+            any [string? :v  map? :v  lit-word? :v] [
+                texts: texts + 1
+                add-part either texts = 1 ['text] ['hint] i i
+                q: i
+            ]
+            all [event-word? :v  i < z  block? pick b i + 1] [add-part/with 'event i i + 1 none v  q: i + 1]
+            all [find [calc is] :v  i < z  block? pick b i + 1] [add-part/with 'reaction i i + 1 none v  q: i + 1]
+            all ['react = :v  i < z] [
+                q: either all ['later = pick b i + 1  i + 1 < z] [i + 2] [i + 1]
+                either block? pick b q [add-part/with 'reaction i q none 'react] [add-part 'stray i i  q: i]
+            ]
+            block? :v [
+                e: none
+                n: 0
+                foreach x def/entries [
+                    n: n + 1
+                    if all [not e  x/how = 'block  not find blocks n  block-took? def f x out] [e: x  append blocks n]
+                ]
+                either e [add-part/with 'block i i e none] [add-part 'action i i]
+                q: i
+            ]
+            paren? :v [add-part 'computed i i  q: i]
+            true [add-part 'stray i i  q: i]
+        ]]
+        i: q + 1
+    ]
+    out
+]
+
+; --- the options a face's style takes, as the designer shows them --------------------------
+
+option-rows: function [
+    "Each option a face's style takes, its own first, then those of the style it is made from: [style [group ...] ...]"
+    def [object!]
+] [
+    ; a group is the entries that are one option: those that fill one field with a value or a
+    ; block, as grid 3 and grid [1 2 1] do, or kind right after chart and later
+    out: copy []
+    seen: copy []
+    s: def
+    while [s] [
+        gs: copy []
+        foreach e s/own [
+            key: either find [value block] e/how [reduce [e/field 'bare]] [reduce [e/field e/how e/kw mold e/args]]
+            either g: select/only seen key [
+                unless find collect [foreach x g [keep mold x/args]] mold e/args [append g e]
+            ] [
+                g: reduce [e]
+                append/only seen key
+                append/only seen g
+                append/only gs g
+            ]
+        ]
+        unless empty? gs [append out reduce [s/name gs]]
+        s: s/parent
+    ]
+    out
+]
+
+group-part: function ["The part a face has of an option, a group of entries: [part entry], or none" parts [block!] es [block!]] [
+    foreach e es [if p: option-of parts e [return reduce [p e]]]
+    none
+]
+
+same-entry?: func [a b] [
+    all [a b  a/field = b/field  a/how = b/how  a/kw = b/kw  (mold a/args) = mold b/args]
+]
+
+option-of: function [
+    "The part of a face that entry e took, or none; for a custom rule, the part of that rule"
+    parts [block!] e [object!] /rule w
+] [
+    foreach p parts [
+        if all [find [entry block name label] p/what  same-entry? p/e e  any [not rule  p/word = w]] [return p]
+    ]
+    none
+]
+
+row-values: function [
+    "The values of an option a face has: what follows its word"
+    d [object!] f [object!] p [object!]
+] [
+    r: face-range d f
+    from: either all [p/e  p/e/kw  find [keyword rule] p/e/how] [p/from + 1] [p/from]
+    copy/part at r/1 from p/to - from + 1
+]
+
+values-span: function ["Where the values from one index to another of a loaded block sit" d [object!] b [block!] from [integer!] to [integer!]] [
+    a: span-of d b from
+    z: span-of d b to
+    as-pair a/x z/x + z/y - a/x
+]
+
+; where a new option goes: after the last value that is no block nor handler, so on the face's first line
+insert-option-at: function ["The index in the text where a new option of a face goes" d [object!] f [object!]] [
+    r: face-range d f
+    n: r/2
+    ; a view with no words of its own yet: they go at the start of its block
+    if r/3 < r/2 [return 1 + first block-span d r/1]
+    foreach p face-parts d f [
+        if find [global label style name entry text hint computed stray] p/what [n: p/to]
+    ]
+    s: span-of d r/1 n
+    s/x + s/y
+]
+
+molded: function [vals [block!]] [mold/only vals]
+
+set-option: function [
+    "The text with an option of a face set to values (none for a flag): written anew where it is, or added"
+    d [object!] f [object!] e [object!] vals [block! none!] /rule w /over q [object!] "In place of the part of another entry of the option"
+] [
+    parts: face-parts d f
+    p: either rule [option-of/rule parts e w] [option-of parts e]
+    r: face-range d f
+    vals: any [vals copy []]
+    if all [over  not p] [
+        s: values-span d r/1 q/from q/to
+        return splice d/text s/x s/y either e/kw [rejoin [e/kw " " molded vals]] [molded vals]
+    ]
+    if p [
+        if find [flag custom] e/how [return d/text]
+        from: either all [e/kw  find [keyword rule] e/how] [p/from + 1] [p/from]
+        if from > p/to [return d/text]
+        s: values-span d r/1 from p/to
+        return splice d/text s/x s/y molded vals
+    ]
+    code: case [
+        e/how = 'custom [form w]
+        e/kw [either empty? vals [form e/kw] [rejoin [e/kw " " molded vals]]]
+        true [molded vals]
+    ]
+    if e/lead [
+        ; right after the style, after the ones before it
+        n: none
+        foreach q parts [if any [q/what = 'style  all [q/e  q/e/lead]] [n: q/to]]
+        s: span-of d r/1 n
+        return splice d/text s/x + s/y 0 rejoin [" " code]
+    ]
+    either e/how = 'block [
+        ; blocks are taken in turn: it goes before the first that comes after it, and the action
+        def: style-def-of d f
+        mine: index? find/same def/entries e
+        before: none
+        foreach q parts [
+            if all [not before  any [
+                q/what = 'action
+                all [q/what = 'block  mine < index? find/same def/entries q/e]
+            ]] [before: q]
+        ]
+        either before [
+            s: span-of d r/1 before/from
+            splice d/text s/x 0 rejoin [code " "]
+        ] [
+            s: face-span d f
+            splice d/text s/x + s/y 0 rejoin [" " code]
+        ]
+    ] [
+        either all [own-block d f  r/3 < r/2] [view-words-at d r/1 code] [
+            splice d/text insert-option-at d f 0 rejoin [" " code]
+        ]
+    ]
+]
+
+; the first words of a view: a line of their own before its first face, or its whole block
+view-words-at: function [d [object!] b [block!] code [string!]] [
+    if empty? b [return insert-into d b code]
+    s: span-of d b 1
+    splice d/text s/x 0 rejoin [code newline indent-at d/text s/x]
+]
+
+remove-option: function [
+    "The text without an option of a face"
+    d [object!] f [object!] e [object!] /rule w
+] [
+    parts: face-parts d f
+    p: either rule [option-of/rule parts e w] [option-of parts e]
+    unless p [return d/text]
+    r: face-range d f
+    cut d/text values-span d r/1 p/from p/to
+]
+
+part-of: function [parts what word] [
+    foreach p parts [if all [p/what = what  p/word = word] [return p]]
+    none
+]
+
+set-event: function ["The text with a face's handler of an event set to code" d [object!] f [object!] ev [word!] code [block!]] [
+    r: face-range d f
+    either p: part-of face-parts d f 'event ev [
+        replace-value d r/1 p/to code
+    ] [
+        s: face-span d f
+        splice d/text s/x + s/y 0 rejoin [" " ev " " mold code]
+    ]
+]
+
+set-action: function [
+    "The text with what a face does when clicked, the block after it, set to code; none takes it out"
+    d [object!] f [object!] code [block! none!]
+] [
+    r: face-range d f
+    p: part-of face-parts d f 'action none
+    case [
+        all [p code] [replace-value d r/1 p/to code]
+        p [cut d/text values-span d r/1 p/from p/to]
+        ; blocks are taken in turn: the action comes after them all
+        code [s: face-span d f  splice d/text s/x + s/y 0 rejoin [" " mold code]]
+        true [d/text]
+    ]
+]
+
+remove-event: function ["The text without a face's handler of an event" d [object!] f [object!] ev [word!]] [
+    r: face-range d f
+    either p: part-of face-parts d f 'event ev [cut d/text values-span d r/1 p/from p/to] [d/text]
+]
+
+set-reaction: function [
+    "The text with what a face follows (is, calc or react) set to code; none takes it out"
+    d [object!] f [object!] kind [word!] code [block! none!]
+] [
+    r: face-range d f
+    p: part-of face-parts d f 'reaction kind
+    case [
+        all [p code] [replace-value d r/1 p/to code]
+        p [cut d/text values-span d r/1 p/from p/to]
+        code [splice d/text insert-option-at d f 0 rejoin [" " kind " " mold code]]
+        true [d/text]
+    ]
+]
+
+set-hint: function ["The text with the hint a face shows changed, added or, empty, taken out" d [object!] f [object!] new [string!]] [
+    parts: face-parts d f
+    r: face-range d f
+    p: part-of parts 'hint none
+    case [
+        all [p  empty? new] [cut d/text values-span d r/1 p/from p/to]
+        p [replace-value d r/1 p/from new]
+        empty? new [d/text]
+        t: part-of parts 'text none [
+            s: span-of d r/1 t/to
+            splice d/text s/x + s/y 0 rejoin [" " mold new]
+        ]
+        ; a hint needs a text before it
+        true [splice d/text insert-option-at d f 0 rejoin [" " mold "" " " mold new]]
+    ]
+]

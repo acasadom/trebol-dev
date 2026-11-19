@@ -1,7 +1,61 @@
 # trebol-dev
 
-Development tools for [Trebol](https://github.com/acasadom/trebol): a visual designer that lays out
-screens with Trebol's faces and draws and edits machines, writing Trebol code back.
+The visual designer for [Trebol](https://trebol-lang.com/). It opens the screens of a Trebol project, lets you
+change them by hand or with the mouse, and writes the code back: only what you changed, with your comments,
+spacing and order kept as you wrote them.
 
-Work in progress; nothing to install yet. The language and its runtime are the
-[`trebol`](https://www.npmjs.com/package/trebol) package.
+```sh
+npx trebol-dev            # the project in this folder
+npx trebol-dev my-app     # or in another one
+```
+
+It opens on <http://localhost:5180/> (`--port` picks another). Only this machine reaches it.
+
+New to it? [Design with the mouse](https://trebol-lang.com/docs/designer/01-the-window.html), the third tutorial of
+Trebol's documentation, builds the screens of a small shop with it, page by page. Its pages are written here, in
+`docs/designer/`, and Trebol's documentation takes them from here when it is built.
+
+## What it does
+
+The window holds it all, with no page scroll: the structure on the left, the properties on the right, and in
+the middle the preview, the code, or both side by side (*Design*, *Split*, *Code*). Each part scrolls by itself.
+
+- **Files**: every `.trb` file of the project, outside `node_modules` and hidden folders.
+- **Structure**: the faces of each `view` and `layout` in the file, nested as written, with its screens, tabs,
+  steps and the template of its rows. Drag a face anywhere to move it, into another box too; *Up* and *Down*
+  move it past the face beside it, into the box beside it and out of its own. *Add* has every style of Trebol, in groups
+  (layout, text, input, choice, data, action, media): what it adds goes inside the chosen face when that face
+  holds others (a panel, a row, a grid...), and after it otherwise; the face added is the one chosen next.
+- **Preview**: the screen as it looks, laid out without running any of the program's code. Click a face to
+  choose it.
+- **Code**: the file itself, coloured as Trebol, with the chosen face marked. Put the cursor in a face to
+  choose it. Change the code and the structure and preview follow; change the design and the code follows.
+  Code that does not load says why, and is not saved.
+- **Properties**: the text a face shows, the name of a field, whether it is required, the columns of a grid
+  (`3`, a weight for each as `1 2 1`, or `small 1` for a fixed side column); *Delete* takes it out.
+
+A face chosen in one of them is chosen in all three. Drag the space between two columns to make one wider.
+
+*Undo* and *Redo* take back any change and bring it back, made with the mouse, in the properties or in the
+code (Ctrl+Z, Ctrl+Shift+Z, Ctrl+Y). *Save* writes the file. Leaving a file with changes asks first.
+
+## How it keeps your code
+
+The text of the file is the truth: the designer keeps the design nowhere else. It reads the values of the file
+and where each one sits in the text (`load-spans`), and lays out each screen as `trebol check` does
+(`ui-sketch`), so every face knows the text it was written with. A change rewrites only that text: a new label
+replaces the old string, a face that moves takes its comment with it, a face that goes takes its line.
+
+## On a web page
+
+With no project behind it, as on trebol-lang.com, it shows a sample project; *Save* downloads the file.
+
+## Building the code editor
+
+The code view is CodeMirror 6, built into one file, `app/trebol-code.js`, from `editor/trebol-code.js`:
+`npm install` and `npm run build:editor`. The built file is kept in the repository, so the designer needs
+nothing else to run.
+
+## License
+
+Apache-2.0.

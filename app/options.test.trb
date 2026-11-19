@@ -1,0 +1,131 @@
+Trebol [
+    title: "Reading what each value of a face is, from what its style takes, and editing its options"
+    app: none
+]
+
+import %model.trb
+import %options.trb
+
+whats: function [t] [
+    d: design-of t
+    f: first faces-of d
+    collect [foreach p face-parts d f [keep p/what]]
+]
+entry: function [style [word!] field [word!] /kw w] [
+    foreach e get in select ui-style-defs style 'entries [
+        if all [e/field = to set-word! field  any [not kw  e/kw = w]] [return e]
+    ]
+    none
+]
+first-face: func [t] [first faces-of design-of t]
+edit-first: func [t fn [any-function!] args [block!]] [
+    d: design-of t
+    apply/only :fn append reduce [d first faces-of d] args
+]
+
+"parts"
+[[style text hint entry entry event] = whats {view [field "Email" "you@x" required email on-change [go]]}]
+[[label style name text] = whats {view [who: field name "Name"]}]
+[[global label style text] = whats {view [global t: text "Hi"]}]
+[[style text block] = whats {view [panel "P" [text "x"]]}]
+[[style text action] = whats {view [button "Go" [go]]}]
+[[style entry entry entry] = whats {view [video %a.mp4 poster %a.jpg autoplay]}]
+[[style entry label block] = whats {view [chart bar income [m "M"]]}]
+[[style text reaction] = whats {view [text "x" is [now]]}]
+[[style text reaction] = whats {view [text "x" react later [go]]}]
+[[style text entry] = whats {view [field "x" length 2 40]}]
+
+"values"
+[d: design-of {view [video %a.mp4 poster %a.jpg]}  f: first faces-of d
+    p: option-of face-parts d f entry 'video 'poster
+    [%a.jpg] = row-values d f p]
+[d: design-of {view [field "x" length 2 40]}  f: first faces-of d
+    [2 40] = row-values d f option-of face-parts d f entry 'field 'length]
+[d: design-of {view [chart line [a "A"]]}  f: first faces-of d
+    [line] = row-values d f option-of face-parts d f entry 'chart 'kind]
+
+"rows"
+[rows: option-rows select ui-style-defs 'field
+    [field input face] = extract rows 2]
+[rows: option-rows select ui-style-defs 'chart
+    ; kind once: the one right after the style and the one later are one option
+    1 = length? collect [foreach g second rows [if g/1/field = first [kind:] [keep g]]]]
+
+"setting"
+[{view [field "x" required]} = edit-first {view [field "x"]} :set-option reduce [entry 'input 'required none]]
+[{view [video %a.mp4 poster %b.jpg]} = edit-first {view [video %a.mp4 poster %a.jpg]} :set-option reduce [entry 'video 'poster [%b.jpg]]]
+[{view [video %a.mp4 poster %b.jpg]} = edit-first {view [video %a.mp4]} :set-option reduce [entry 'video 'poster [%b.jpg]]]
+[{view [field "x" length 2 9]} = edit-first {view [field "x" length 2 40]} :set-option reduce [entry 'field 'length [2 9]]]
+[{view [panel "P" fill [text "a"]]} = edit-first {view [panel "P" [text "a"]]} :set-option reduce [entry 'face 'fill none]]
+[{view [chart bar [a "A"]]} = edit-first {view [chart line [a "A"]]} :set-option reduce [entry 'chart 'kind [bar]]]
+[{view [table sortable sorted [due asc]]} = edit-first {view [table sortable]} :set-option reduce [entry 'table 'sorted [[due asc]]]]
+
+"removing"
+[{view [field "x"]} = edit-first {view [field "x" required]} :remove-option reduce [entry 'input 'required]]
+[{view [video %a.mp4]} = edit-first {view [video %a.mp4 poster %a.jpg]} :remove-option reduce [entry 'video 'poster]]
+[{view [field "x" email]} = edit-first {view [field "x" length 2 40 email]} :remove-option reduce [entry 'field 'length]]
+
+"events, follows and hint"
+[{view [field "x" on-change [go]]} = edit-first {view [field "x"]} :set-event [on-change [go]]]
+[{view [field "x" on-change [stop]]} = edit-first {view [field "x" on-change [go]]} :set-event [on-change [stop]]]
+[{view [field "x"]} = edit-first {view [field "x" on-change [go]]} :remove-event [on-change]]
+[{view [text "x" is [now]]} = edit-first {view [text "x"]} :set-reaction [is [now]]]
+[{view [text "x"]} = edit-first {view [text "x" is [now]]} :set-reaction reduce [quote is none]]
+[{view [field "x" "y"]} = edit-first {view [field "x"]} :set-hint ["y"]]
+[{view [field "x" "z"]} = edit-first {view [field "x" "y"]} :set-hint ["z"]]
+[{view [field "x"]} = edit-first {view [field "x" "y"]} :set-hint [""]]
+
+"what compose puts in"
+[[style entry] = whats {view [button menu (looks)]}]
+[[style computed] = whats {view [heading (title)]}]
+
+"blocks a function says no to"
+[[style entry block] = whats {view [grid 3 [text "a"]]}]
+[[style block block] = whats {view [grid [1 2] [text "a" text "b"]]}]
+[d: design-of {view [grid [1 2] [text "a" text "b"]]}  f: first faces-of d
+    ps: face-parts d f
+    all [(first [cols:]) = ps/2/e/field  (first [pane:]) = ps/3/e/field]]
+
+"right after the style"
+[d: design-of {view [chart [a "A"]]}  f: first faces-of d
+    e: none  foreach x get in select ui-style-defs 'chart 'entries [if all [x/how = 'label] [e: x]]
+    {view [chart income [a "A"]]} = set-option d f e [income]]
+
+"a view: its words are those before its first face"
+[d: design-of {view [width fill on-key [go] text "a"]}  v: first shown-faces d  [1 4] = next face-range d v]
+[d: design-of {view [text "a"]}  v: first shown-faces d  [1 0] = next face-range d v]
+[d: design-of {view [width fill text "a"]}  [entry] = collect [foreach p face-parts d first shown-faces d [keep p/what]]]
+[d: design-of {view [width fill text "a"]}  'view = style-word d first shown-faces d]
+[d: design-of {view [width fill text "a"]}  [view text] = collect [foreach f shown-faces d [keep f/style]]]
+[
+    d: design-of {view [^/    text "a"^/]}
+    {view [^/    width fill^/    text "a"^/]} = set-option d first shown-faces d entry/kw 'face 'size 'width [fill]
+]
+[
+    d: design-of {view [width small text "a"]}
+    {view [width small fill text "a"]} = set-option d first shown-faces d entry/kw 'face 'fill 'fill none
+]
+[d: design-of {view []}  {view [^/    fill^/]} = set-option d first shown-faces d entry/kw 'face 'fill 'fill none]
+
+"what a face does when clicked"
+[{view [button "Go" [go]]} = edit-first {view [button "Go"]} :set-action [[go]]]
+[{view [button "Go" [stop]]} = edit-first {view [button "Go" [go]]} :set-action [[stop]]]
+[{view [button "Go"]} = edit-first {view [button "Go" [go]]} :set-action reduce [none]]
+[{view [panel [text "a"] [go]]} = edit-first {view [panel [text "a"]]} :set-action [[go]]]
+
+"the styles and rules a file defines are known, and Trebol's own come back"
+[
+    d: design-of {stylize [note: text [takes: [role: 'loud]]]  view [note "a" loud]}
+    all [[style text entry] = collect [foreach p face-parts d first faces-of d [keep p/what]]  to logic! select ui-style-defs 'note]
+]
+[
+    d: design-of {rule 'even "Even" [even? value]  view [field n "N" even]}
+    [style name text entry] = collect [foreach p face-parts d first faces-of d [keep p/what]]
+]
+[
+    d: design-of {stylize [view: view [caption: none  takes: [caption: 'caption text]]]  view [caption "C" text "a"]}
+    all [
+        [entry] = collect [foreach p face-parts d first shown-faces d [keep p/what]]
+        none? find words-of select styles 'view 'caption
+    ]
+]
