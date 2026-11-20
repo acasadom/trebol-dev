@@ -83,7 +83,7 @@ redraw-machines: function [] [
     k: 0
     machine-tree/data: collect [foreach m ms [k: k + 1  keep node-tree m k 1]]
     machine-tree/selected: all [picked  machine-node-of tree-id picked machine-tree/data]
-    machine-none/hidden: not empty? ms
+    machine-none/hidden: not machine-tree/hidden: empty? ms
     show-machine-problems
     if editing = "Machines" [
         mark-machine
