@@ -10,9 +10,11 @@ edit-next: none          ; the id whose name the drawing opens for typing when i
 
 canvas-place: function ["[k id what] of an id of the drawing, or none" id] [
     unless string? id [return none]
-    what: select [#"m" machine #"s" state #"w" way] first id
+    what: select [#"m" machine #"s" state #"w" way #"u" state #"v" state] first id
     parts: split next id #"."
-    all [what  2 = length? parts  reduce [to integer! parts/1 to integer! parts/2 what]]
+    ; what is drawn inside a state from the fragment it uses is that state's: u1.3:2 is s1.3
+    if all [what  2 = length? parts  find "uv" first id] [parts/2: first split parts/2 #":"]
+    all [what  2 = length? parts  attempt [reduce [to integer! parts/1 to integer! parts/2 what]]]
 ]
 
 ; what is chosen, by the name of a state of the k-th machine, once the text is read again

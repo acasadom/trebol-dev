@@ -24,6 +24,10 @@ export function textWidth(s, font = FONT) {
   return Math.ceil(measurer.measureText(s).width);
 }
 
+/** The name a state is drawn with: a state that uses a fragment says which. */
+export const MARK = ' \u25C7 ';
+export const shownName = n => n.uses ? `${n.name}${MARK}${n.uses}` : n.name;
+
 export function svg(tag, attrs = {}, parent = null) {
   const e = document.createElementNS(NS, tag);
   for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, String(v));
@@ -70,6 +74,14 @@ export const css = `
 .node.target > .box { stroke: var(--tb-primary, #2563eb); stroke-width: 2.5; stroke-dasharray: none;
   fill: color-mix(in oklch, var(--tb-primary, #2563eb) 10%, var(--tb-surface, #fff)); }
 .machine.target > .box { stroke: var(--tb-primary, #2563eb); stroke-dasharray: 6 4; }
+.uses > .box { stroke: var(--tb-primary, #2563eb); stroke-opacity: .55; }
+.mark { fill: var(--tb-primary, #2563eb); font-weight: 600; }
+/* what a state shows of the fragment it uses: seen, not changed here */
+.fixed > .box { fill: color-mix(in oklch, var(--tb-text, #1c1c1c) 4%, var(--tb-surface, #fff)); stroke-dasharray: 3 3; stroke-opacity: .7; }
+.fixed > .name { fill: var(--tb-muted, #6b7280); }
+.fixed.group > .box { fill: none; }
+.way.fixed path.line { stroke-dasharray: 4 3; stroke-opacity: .7; }
+.way.fixed { cursor: default; }
 .dot { fill: var(--tb-text, #1c1c1c); }
 .way { cursor: pointer; }
 .way path.line { fill: none; stroke: var(--tb-muted, #78716c); stroke-width: 1.5; }
@@ -111,7 +123,7 @@ export function elkGraph(g, direction = 'RIGHT') {
   const edges = [];
   const make = n => {
     const inside = kids.get(n.id) ?? [];
-    const label = n.kind === 'machine' ? '' : n.name;
+    const label = n.kind === 'machine' ? '' : shownName(n);
     const e = { id: n.id, layoutOptions: {} };
     if (inside.length) {
       e.children = inside.map(make);
@@ -189,11 +201,11 @@ export function drawGraph(graph, arranged, ways, scale, frame = arranged.frame) 
     const n = byId.get(b.id);
     if (!n) continue;
     const kind = b.kind;
-    const g = svg('g', { class: `node ${kind}`, 'data-id': n.id }, nodes);
-    if (n.kind !== 'machine') {
+    const g = svg('g', { class: `node ${kind}${n.fixed ? ' fixed' : ''}${n.uses ? ' uses' : ''}`, 'data-id': n.id }, nodes);
+    if (n.kind !== 'machine' && !n.fixed) {
       g.setAttribute('tabindex', '0');
       g.setAttribute('role', 'button');
-      g.setAttribute('aria-label', `${n.kind} ${n.name}`);
+      g.setAttribute('aria-label', n.uses ? `${n.kind} ${n.name}, uses the fragment ${n.uses}` : `${n.kind} ${n.name}`);
     }
     const r = kind === 'group' || kind === 'parallel' ? 10 : 9;
     svg('rect', { class: 'box', x: b.x, y: b.y, width: b.w, height: b.h, rx: r }, g);
@@ -209,12 +221,14 @@ export function drawGraph(graph, arranged, ways, scale, frame = arranged.frame) 
         t.setAttribute('text-anchor', 'middle');
       }
       t.textContent = n.name;
+      // the fragment it uses, after its name
+      if (n.uses) svg('tspan', { class: 'mark' }, t).textContent = `${MARK}${n.uses}`;
     }
   }
   for (const d of arranged.dots) svg('circle', { class: 'dot', cx: d.x, cy: d.y, r: 6 }, nodes);
   const lines = svg('g', {}, s);
   for (const way of ways) {
-    const g = svg('g', { class: way.start ? 'start' : 'way', 'data-id': way.id }, lines);
+    const g = svg('g', { class: way.start ? 'start' : way.fixed ? 'way fixed' : 'way', 'data-id': way.id }, lines);
     if (!way.start) svg('path', { class: 'hit', d: way.d }, g);
     svg('path', { class: 'line', d: way.d }, g);
     arrowHead(g, way.tip[0], way.tip[1]);

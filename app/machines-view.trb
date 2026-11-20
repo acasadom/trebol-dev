@@ -31,6 +31,7 @@ show-editing: function [what [string!]] [
 
 state-title: function [m [object!] n [object!]] [
     t: rejoin [n/kind " " n/name]
+    if n/uses [append t rejoin [" uses " n/uses]]
     p: all [n/parent  machine-node m n/parent]
     if all [p  p/initial = n/name] [append t " (initial)"]
     t
@@ -49,7 +50,7 @@ node-tree: function [m [object!] k [integer!] id [integer!]] [
     n: machine-node m id
     node: make map! reduce [
         'id rejoin [either id = 1 ["m"] ["s"] k "." id]
-        'name either id = 1 [rejoin [either m/name [rejoin [m/name ": "]] [""] "machine"]] [state-title m n]
+        'name either id = 1 [rejoin [either m/name [rejoin [m/name ": "]] [""] m/kind]] [state-title m n]
     ]
     kids: collect [
         foreach c n/children [keep node-tree m k c]
@@ -67,10 +68,9 @@ node-tree: function [m [object!] k [integer!] id [integer!]] [
 
 tree-id: function [p [block!]] [rejoin [select [machine "m" state "s" way "w"] p/3 p/1 "." p/2]]
 
-pick-machine: function ["Chooses what a row of the machines' structure is" id [string!]] [
-    what: select [#"m" machine #"s" state #"w" way] first id
-    parts: split next id #"."
-    set 'picked reduce [to integer! parts/1 to integer! parts/2 what]
+pick-machine: function ["Chooses what a row of the machines' structure is, or of the drawing" id [string!]] [
+    unless p: canvas-place id [exit]
+    set 'picked p
     machine-tree/selected: machine-node-of id machine-tree/data
     mark-machine
     draw-machine
@@ -79,6 +79,7 @@ pick-machine: function ["Chooses what a row of the machines' structure is" id [s
 
 redraw-machines: function [] [
     set 'ms either d [machines-of d] [copy []]
+    prune-opened
     if all [picked  any [not pick ms picked/1  not either picked/3 = 'way [picked-way] [picked-node]]] [set 'picked none]
     k: 0
     machine-tree/data: collect [foreach m ms [k: k + 1  keep node-tree m k 1]]
@@ -96,7 +97,7 @@ redraw-machines: function [] [
 machine-problems-of: function [] [
     collect [
         foreach m ms [
-            e: try [machine-engine/make-machine m/block]
+            e: either m/kind = 'fragment [fragment-problem m] [try [machine-engine/make-machine engine-block ms m]]
             if error? e [
                 msg: e/message
                 if find/match msg "machine: " [msg: skip msg 9]
@@ -128,6 +129,7 @@ machine-node-of: function [id list [block!]] [
 graph-data: function ["What the drawing of the k-th machine is given: its nodes and ways, by the structure's ids" k [integer!]] [
     m: pick ms k
     places: machine-places text machine-key d m
+    inner: copy []  inner-ways: copy []
     nodes: collect [
         foreach n m/nodes [
             p: all [n/parent  machine-node m n/parent]
@@ -145,9 +147,18 @@ graph-data: function ["What the drawing of the k-th machine is given: its nodes 
                 'kind form n/kind
                 'parent either p [rejoin [either p/id = 1 ["m"] ["s"] k "." p/id]] [none]
                 'initial to logic! all [p  p/initial = n/name]
+                'uses either n/uses [form n/uses] [none]
+            ]
+            ; opened, a state that uses a fragment shows it inside, to be seen there
+            id: rejoin ["s" k "." n/id]
+            if all [n/uses  find opened id  f: fragment-named ms n/uses] [
+                more: fragment-inside id rejoin [k "." n/id] id f either m/name [reduce [m/name]] [copy []]
+                append inner more/1
+                append inner-ways more/2
             ]
         ]
     ]
+    append nodes inner
     ways: collect [
         foreach w m/ways [
             if src: way-source m w [
@@ -161,7 +172,8 @@ graph-data: function ["What the drawing of the k-th machine is given: its nodes 
             ]
         ]
     ]
-    make map! reduce ['name either m/name [form m/name] [none] 'nodes nodes 'ways ways]
+    append ways inner-ways
+    make map! reduce ['name either m/name [form m/name] [none] 'kind form m/kind 'nodes nodes 'ways ways]
 ]
 
 ; the chosen machine, or the first; none when the file makes none
@@ -249,11 +261,11 @@ new-machine-code: function [] [
 ]
 
 machine-add: function ["What the Add menu of the machines does" item [word!]] [
-    if item = 'machine [
+    if find [machine fragment] item [
         t: copy text
         unless any [empty? t  newline = last t] [append t newline]
         unless empty? t [append t newline]
-        edit append t new-machine-code
+        edit append t either item = 'machine [new-machine-code] [new-fragment-code ms]
         set 'picked reduce [length? ms 1 'machine]
         redraw
         exit
@@ -290,6 +302,7 @@ machine-props-code: function [] [
     m: picked-machine
     switch picked/3 [
         machine [
+            if m/kind = 'fragment [return fragment-props-code m]
             compose/deep [
                 code (rejoin [either m/name [rejoin [m/name ": "]] [""] "machine"])
                 text small muted "Drag states onto the drawing from its bar, and from the dots around a state to another to make a way."
@@ -317,6 +330,7 @@ machine-props-code: function [] [
                         on-change [machine-act 'outcome value]
                 ]
             ]
+            append out use-props-code m n
             append out code-field "on-enter" "runs when the machine comes into it" 'on-enter state-word-value d m n/id 'on-enter
             append out code-field "on-exit" "runs when the machine leaves it" 'on-exit state-word-value d m n/id 'on-exit
             if n/kind <> 'final [
@@ -386,7 +400,7 @@ machine-act: function [what [word!] value] [
     n: picked-node
     w: picked-way
     id: picked/2
-    if find [name machine-name data outcome on-enter on-exit timeout run defer events where set] what [set 'keep-mprops true]
+    if find [name machine-name data outcome on-enter on-exit timeout run defer events where set spec use-with] what [set 'keep-mprops true]
     t: switch what [
         name [all [string? value  v: attempt [load value]  word? v  rename-state d m id v]]
         initial [either value [set-initial d m id] [none]]
@@ -407,41 +421,19 @@ machine-act: function [what [word!] value] [
         delete [r: delete-state d m id  set 'picked none  r]
         machine-name [
             v: all [string? value  attempt [load value]]
-            r: none
-            if word? v [
-                foreach [blk sps own] d/blocks [
-                    repeat i length? blk [
-                        if same? pick blk i m/block [
-                            ; repair: machine [...], or machine [...] with no word yet
-                            r: either all [i > 2  set-word? pick blk i - 2] [
-                                s: span-of d blk i - 2
-                                splice d/text s/x s/y rejoin [v ":"]
-                            ] [
-                                s: span-of d blk i - 1
-                                splice d/text s/x 0 rejoin [v ": "]
-                            ]
-                        ]
-                    ]
-                ]
-            ]
+            r: all [word? v  rename-machine d ms m v]
             if r [r: rename-machine-places r machine-key d m v]
             r
         ]
         delete-machine [
-            r: none
-            foreach [blk sps own] d/blocks [
-                repeat i length? blk [
-                    if same? pick blk i m/block [
-                        ; with the word it is set to: repair: machine [...]
-                        from: either all [i > 2  set-word? pick blk i - 2] [i - 2] [i - 1]
-                        r: cut d/text range-span d blk from i
-                    ]
-                ]
-            ]
+            r: delete-machine-text d m
             if r [r: rename-machine-places r machine-key d m none]
             set 'picked none
             r
         ]
+        spec [all [string? value  set-fragment-spec d m value]]
+        use [set-use d m id either value = "(none)" [none] [to word! value]]
+        use-with [set-use-with d m id value]
         events [
             v: any [attempt [load/all any [value ""]] copy []]
             if all [block? v  1 = length? v  block? first v] [v: first v]

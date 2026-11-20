@@ -27,7 +27,8 @@
 // has no places and nothing is put anywhere.
 // Built into app/machine-graph.js by `npm run build:graph`, with ELK's worker copied to app/elk-worker.js.
 import { css, drawGraph, elkGraph, layouter, svg, HEAD } from './graph-draw.js';
-import { arrange, cornerOf, elkPlaces, leafSize, placesOf, route } from './graph-place.js';
+import { popupMenu } from './graph-menu.js';
+import { arrange, cornerOf, elkPlaces, leafSize, placesOf, route, unplacedInsides } from './graph-place.js';
 
 const SMALLEST = 0.8;     // how much a drawing may shrink to fit its place
 const NEAR = 14;          // how far from a state its dots stay shown
@@ -81,7 +82,6 @@ class MachineGraph extends HTMLElement {
   #press = null;      // what the pointer is doing on the drawing: {mode: press | move | link, ...}
   #handled = false;   // the click that ends a press did its work on pointerup
   #hover = null;      // the state whose dots are shown
-  #menu = null;
   #inline = null;     // the box a name is typed in: {id, input, place, finish}
   #watch = new ResizeObserver(() => this.#show());
 
@@ -181,7 +181,8 @@ class MachineGraph extends HTMLElement {
     tidy.disabled = !this.#graph || this.#graph.nodes.length < 2;
     tidy.addEventListener('click', () => this.#tidy());
     bar.append(undo, redo, tidy);
-    if (!this.#graph) return;
+    // a fragment runs only in the machines that use it
+    if (!this.#graph || this.#graph.kind === 'fragment') return;
     if (this.#trying) {
       const restart = button('go', 'restart', 'Restart');
       restart.addEventListener('click', () => this.#tell('restart'));
@@ -251,8 +252,8 @@ class MachineGraph extends HTMLElement {
     }
     let rel = new Map(g.nodes.filter(n => n.parent != null && typeof n.x === 'number' && typeof n.y === 'number')
       .map(n => [n.id, { x: n.x, y: n.y }]));
-    this.#placed = rel.size > 0;
-    if (!rel.size && g.nodes.length > 1) {
+    this.#placed = g.nodes.some(n => !n.fixed && rel.has(n.id));
+    if (!this.#placed && g.nodes.length > 1) {
       try {
         rel = await this.#elk(g);
       } catch (e) {
@@ -260,6 +261,12 @@ class MachineGraph extends HTMLElement {
         this.#stage.replaceChildren(Object.assign(document.createElement('div'), { className: 'empty', textContent: `The drawing failed: ${e?.message ?? e}` }));
         return;
       }
+    }
+    // what a state shows of a fragment whose drawing has no places yet is laid out by ELK, inside that state
+    for (const sub of unplacedInsides(g, rel)) {
+      try {
+        for (const [id, p] of await this.#elk(sub)) if (!rel.has(id) && id !== sub.name) rel.set(id, p);
+      } catch { /* drawn in a row, as states with no place are */ }
     }
     if (turn !== this.#turn) return;
     this.#rel = rel;
@@ -382,13 +389,23 @@ class MachineGraph extends HTMLElement {
 
   #inside(r, p, pad = 0) { return p.x >= r.x - pad && p.x <= r.x + r.width + pad && p.y >= r.y - pad && p.y <= r.y + r.height + pad; }
 
-  /** The innermost state under a point: not the machine. */
-  #stateAt(p) { return this.#rects.find(r => r.kind !== 'machine' && this.#inside(r, p)) ?? null; }
+  /** The innermost state under a point: not the machine; in what a state shows of its fragment, that state. */
+  #stateAt(p) {
+    const r = this.#rects.find(x => x.kind !== 'machine' && this.#inside(x, p)) ?? null;
+    const owner = r && this.#node(r.id)?.owner;
+    return owner ? this.#rects.find(x => x.id === owner) ?? null : r;
+  }
+
+  /** The id a way under the pointer stands for: a way shown from a fragment is the state that uses it. */
+  #wayId(el) {
+    const id = el.getAttribute('data-id');
+    return this.#way(id)?.owner ?? id;
+  }
 
   /** The id of the box a state dropped at a point goes into: a state that can hold states, or the machine. */
   #containerAt(p, moving) {
     for (const r of this.#rects) {
-      if (r.kind === 'final' || !this.#inside(r, p)) continue;
+      if (r.kind === 'final' || this.#node(r.id)?.fixed || !this.#inside(r, p)) continue;
       if (moving && this.#within(r.id, moving)) continue;
       return r.id;
     }
@@ -522,19 +539,25 @@ class MachineGraph extends HTMLElement {
       if (this.#handled) { this.#handled = false; return; }
       if (!this.#svg) return;
       const way = ev.target.closest?.('.way');
-      if (way) return this.#tell('pick', way.getAttribute('data-id'));
+      if (way) return this.#tell('pick', this.#wayId(way));
       if (!this.#stateAt(this.#at(ev))) this.#tell('pick', this.#rootId());
     });
     st.addEventListener('dblclick', ev => {
       if (!this.#svg) return;
       ev.preventDefault();
       const way = ev.target.closest?.('.way');
-      if (way) return this.#rename(way.getAttribute('data-id'));
+      if (way) {
+        const w = this.#way(way.getAttribute('data-id'));
+        return w?.fixed ? this.#tell('fragment', this.#node(w.owner)?.uses) : this.#rename(w?.id);
+      }
       const p = this.#at(ev);
       const r = this.#stateAt(p);
       const add = into => this.#tell('add', ['state', into, this.#spotIn(p, into), this.#drawn(true)]);
       if (!r) return add(this.#rootId());
-      // a box with states inside: its name renames it, its room takes a new state
+      // a box with states inside: its name renames it, its room takes a new state; what a state shows of
+      // the fragment it uses opens the fragment
+      const hit = this.#rects.find(x => x.kind !== 'machine' && this.#inside(x, p));
+      if (hit && this.#node(hit.id)?.fixed) return this.#tell('fragment', this.#node(r.id)?.uses);
       if ((r.kind === 'group' || r.kind === 'parallel') && p.y > r.y + HEAD) return add(r.id);
       this.#rename(r.id);
     });
@@ -543,7 +566,7 @@ class MachineGraph extends HTMLElement {
       ev.preventDefault();
       const way = ev.target.closest?.('.way');
       const r = way ? null : this.#stateAt(this.#at(ev));
-      this.#openMenu(ev, way ? way.getAttribute('data-id') : r?.id ?? this.#rootId());
+      this.#openMenu(ev, way ? this.#wayId(way) : r?.id ?? this.#rootId());
     });
     st.addEventListener('keydown', ev => {
       const node = ev.target.closest?.('.node');
@@ -678,6 +701,11 @@ class MachineGraph extends HTMLElement {
       const parent = this.#node(node.parent);
       if (!node.initial && parent?.kind !== 'parallel') items.push(['Make it the initial state', () => this.#tell('initial', id)]);
       if (node.kind !== 'final') items.push(['Add a state inside', () => this.#tell('add', ['state', id, null, this.#drawn()])]);
+      if (node.uses) {
+        const open = this.#graph.nodes.some(n => n.owner === id);
+        items.push([open ? `Close ${node.uses}` : `Open ${node.uses}: see its states here`, () => this.#tell('open', id)],
+          [`Edit the fragment ${node.uses}`, () => this.#tell('fragment', node.uses)]);
+      }
       items.push(['Rename', () => this.#rename(id)]);
       if (node.parent !== this.#rootId()) {
         // it comes out where it is drawn, from the box it goes into
@@ -691,39 +719,11 @@ class MachineGraph extends HTMLElement {
     }
     if (!items.length) return;
     this.#tell('pick', id);
-    const menu = Object.assign(document.createElement('div'), { className: 'menu' });
-    menu.setAttribute('role', 'menu');
-    for (const [text, act, cls] of items) {
-      const b = Object.assign(document.createElement('button'), { type: 'button', textContent: text });
-      b.setAttribute('role', 'menuitem');
-      if (cls) b.className = cls;
-      b.addEventListener('click', () => { this.#closeMenu(); act(); });
-      menu.append(b);
-    }
-    menu.addEventListener('keydown', e => {
-      const bs = [...menu.querySelectorAll('button')];
-      const i = bs.indexOf(this.#root.activeElement);
-      if (e.key === 'Escape') { e.preventDefault(); this.#closeMenu(); this.#stage.focus(); }
-      else if (e.key === 'ArrowDown') { e.preventDefault(); bs[(i + 1) % bs.length].focus(); }
-      else if (e.key === 'ArrowUp') { e.preventDefault(); bs[(i - 1 + bs.length) % bs.length].focus(); }
-    });
-    menu.style.left = `${Math.min(ev.clientX, innerWidth - 200)}px`;
-    menu.style.top = `${Math.min(ev.clientY, innerHeight - 40 * items.length - 16)}px`;
-    this.#root.append(menu);
-    this.#menu = menu;
-    menu.querySelector('button').focus();
-    this.#outside = e => { if (!e.composedPath().includes(menu)) this.#closeMenu(); };
-    setTimeout(() => document.addEventListener('pointerdown', this.#outside, true));
+    this.#closeMenu = popupMenu(this.#root, ev, items, () => this.#stage.focus());
   }
 
-  #outside = null;
-
-  #closeMenu() {
-    this.#menu?.remove();
-    this.#menu = null;
-    if (this.#outside) document.removeEventListener('pointerdown', this.#outside, true);
-    this.#outside = null;
-  }
+  /** Closes the menu of a right click, if one is open. */
+  #closeMenu = () => {};
 }
 
 customElements.define('tb-machine-graph', MachineGraph);

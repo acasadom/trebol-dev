@@ -20,6 +20,7 @@ import %machines.trb
 import %machine-edits.trb
 import %machine-moves.trb
 import %machine-places.trb
+import %fragments.trb
 import %trebol-code.js
 import %machine-graph.js
 
@@ -394,6 +395,7 @@ add-face: function [item [word!]] [
 
 ; the machines of the file: their structure, properties and code (shares these words)
 do %machines-view.trb
+do %fragments-view.trb
 do %machine-try.trb
 do %machine-canvas.trb
 
@@ -424,7 +426,10 @@ view compose/deep/only [
                 on-reorder [reorder event/parent event/from event/to]
                 on-drop [drop-face event/dropped event/parent event/index]
             global machine-side: column hidden [
-                button #plus "New machine" small [machine-add 'machine]
+                row [
+                    button #plus "New machine" small [machine-add 'machine]
+                    button #plus "New fragment" small [machine-add 'fragment]
+                ]
                 global machine-none: text muted "This file makes no machines yet. Its states and ways are made on the drawing."
                 global machine-tree: tree [name] on-select [pick-machine row/id]
             ]
@@ -445,6 +450,7 @@ view compose/deep/only [
                     on-grow [canvas-grow event/detail] on-rename [canvas-rename event/detail] on-remove [canvas-remove event/detail]
                     on-initial [canvas-initial event/detail] on-move [canvas-move event/detail] on-place [canvas-placed event/detail]
                     on-undo [undo-change] on-redo [redo-change] on-try [try-machine] on-restart [try-machine] on-stop [stop-try none]
+                    on-open [toggle-open event/detail] on-fragment [open-fragment event/detail]
                 global machine-problems: table [at "Where" message "Problem"] hidden
             ]
             global code-pane: panel "Code" pad 2 [

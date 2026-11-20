@@ -1,7 +1,7 @@
 Trebol [
     title: "The machines of a file: their states and the ways between them, read from the text with where each sits"
     exports: [
-        machines-of machine-node machine-root machine-children machine-path find-machine-state
+        machines-of fragments-of fragment-named machine-node machine-root machine-children machine-path find-machine-state
         state-names state-child machine-keywords way-targets way-source way-label inside-state? fresh-state-name
     ]
 ]
@@ -11,12 +11,14 @@ Trebol [
 ; written, so that an edit changes only those values. The text stays the truth; nothing is run.
 ;
 ; A machine is an object: name (the word it is set to, or none), block (its loaded block), nodes and ways.
+; A fragment (retry: fragment [blanks] [body]) is read as a machine of kind fragment, its block the body
+; and spec its blanks; a state that writes use retry [with [...]] knows the fragment it uses.
 ; A node is a level: the machine itself (id 1, kind machine) or a state (kind state, final or parallel),
 ; known by its place among the nodes, its parent by id, so nothing holds a loop of references.
 ; A way is one from: its level (the node whose block it is written in), where it starts and ends in that
 ; block, its source word, and the places of the states it goes to.
 
-machine-keywords: [data initial state final parallel from no on-enter on-exit on-activity on-save timeout ttl defer run invoke shared]
+machine-keywords: [data initial state final parallel from no on-enter on-exit on-activity on-save timeout ttl defer run invoke shared use]
 
 ; words of one value after them: the index of the word is kept, its value is the next
 one-value: [data initial on-enter on-exit on-activity on-save timeout ttl defer run shared]
@@ -24,6 +26,7 @@ one-value: [data initial on-enter on-exit on-activity on-save timeout ttl defer 
 new-node: function [m [object!] name kind [word!] parent] [
     n: make object! [
         id: name: kind: parent: block: holder: from: to: initial: initial-at: outcome: none
+        uses: use-at: with-at: none     ; use retry with [...]: the fragment's name, where use and with are
         children: copy []
         words: copy []      ; [word index ...]: where each of its own words sits in its block
         strays: copy []     ; indexes of values that are no words of machine
@@ -119,6 +122,12 @@ read-level: function [m [object!] n [object!] b [block!]] [
             w = 'initial [n/initial: pick b i + 1  n/initial-at: i  i: i + 2]
             find one-value w [append n/words reduce [w i]  i: i + 2]
             w = 'no [append n/words reduce ['no i]  i: i + 2]
+            w = 'use [
+                append n/words reduce ['use i]
+                n/uses: pick b i + 1  n/use-at: i
+                i: i + 2
+                if 'with = pick b i [append n/words reduce ['use-with i]  n/with-at: i  i: i + 2]
+            ]
             w = 'invoke [
                 append n/words reduce ['invoke i]
                 i: i + 2
@@ -130,18 +139,20 @@ read-level: function [m [object!] n [object!] b [block!]] [
     ]
 ]
 
-read-machine: function [name b [block!]] [
-    m: make object! [name: block: none  nodes: copy []  ways: copy []]
+read-machine: function [name b [block!] /fragment spec [block!]] [
+    m: make object! [name: block: spec: none  kind: 'machine  nodes: copy []  ways: copy []]
     m/name: name  m/block: b
+    if fragment [m/kind: 'fragment  m/spec: spec]
     root: new-node m any [name 'machine] 'machine none
     read-level m root b
     m
 ]
 
-find-machines: function [code [block! paren!] out [block!] /local b] [
+find-machines: function [code [block! paren!] out [block!] /local b s] [
     name: none
     parse code [any [
         set name set-word! 'machine set b block! (append out read-machine to word! name b)
+        | set name set-word! 'fragment set s block! set b block! (append out read-machine/fragment to word! name b s)
         | 'machine set b block! (append out read-machine none b)
         | set b [block! | paren!] (find-machines b out)
         | skip
@@ -149,12 +160,21 @@ find-machines: function [code [block! paren!] out [block!] /local b] [
 ]
 
 machines-of: function [
-    "The machines a design's file makes, in the order they are written"
+    "The machines and fragments a design's file makes, in the order they are written"
     d [object!]
 ] [
     out: copy []
     find-machines d/values out
     out
+]
+
+fragments-of: function ["The fragments among machines read from a file" ms [block!]] [
+    collect [foreach m ms [if m/kind = 'fragment [keep m]]]
+]
+
+fragment-named: function ["The fragment of that name among machines read from a file, or none" ms [block!] name] [
+    foreach m ms [if all [m/kind = 'fragment  m/name = name] [return m]]
+    none
 ]
 
 machine-node: function ["A node of a machine by its id" m [object!] id [integer!]] [pick m/nodes id]

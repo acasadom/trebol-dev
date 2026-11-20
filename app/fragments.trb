@@ -1,0 +1,141 @@
+Trebol [
+    title: "Fragments in the designer: pieces of machine made once, used in states, and the edits they take"
+    exports: [
+        engine-block fragment-problem machine-head rename-machine delete-machine-text new-fragment-code
+        set-use use-with-value set-use-with fragment-spec-value set-fragment-spec uses-of
+    ]
+]
+
+import %model.trb
+import %machines.trb
+import %machine-edits.trb
+
+; The file is never run, so the words a machine's use names are not set: to make it as the engine does,
+; for its problems or to try it, its block is copied and bound to the file's fragments, made from their text.
+engine-block: function [
+    "A copy of a machine's block, its use words bound to the fragments of the file"
+    ms [block!] m [object!]
+] [
+    frs: fragments-of ms
+    b: copy/deep m/block
+    if empty? frs [return b]
+    ctx: make object! append collect [foreach f frs [keep to set-word! f/name]] none
+    foreach f frs [
+        body: copy/deep f/block
+        bind body ctx
+        set in ctx f/name attempt [fragment copy/deep f/spec body]
+    ]
+    bind b ctx
+]
+
+fragment-problem: function ["What is wrong with a fragment's blanks, or none" f [object!]] [
+    e: try [fragment copy/deep f/spec copy/deep f/block]
+    either error? e [e] [none]
+]
+
+uses-of: function ["The states of the machines that use a fragment: [machine node ...]" ms [block!] name [word!]] [
+    collect [foreach m ms [foreach n next m/nodes [if n/uses = name [keep m  keep n]]]]
+]
+
+; --- the head of a machine: repair: machine [...] or retry: fragment [...] [...] ---------------------------
+
+machine-head: function [
+    "Where a machine is written in the file: [block index], the index of its word (repair:) or of machine itself"
+    d [object!] m [object!]
+] [
+    foreach [blk sps own] d/blocks [
+        repeat i length? blk [
+            if same? pick blk i m/block [
+                h: either m/kind = 'fragment [i - 2] [i - 1]
+                if all [h > 1  set-word? pick blk h - 1] [h: h - 1]
+                return reduce [blk h]
+            ]
+        ]
+    ]
+    none
+]
+
+rename-machine: function [
+    "The text with a machine or fragment set to another word; the states that use a fragment use it by its new name"
+    d [object!] ms [block!] m [object!] v [word!]
+] [
+    unless at: machine-head d m [return none]
+    if all [m/kind = 'fragment  any [find collect [foreach x ms [if x/name [keep x/name]]] v]] [return none]
+    blk: at/1  h: at/2
+    changes: either set-word? pick blk h [
+        value-change d blk h rejoin [v ":"]
+    ] [
+        s: span-of d blk h
+        reduce [s/x 0 rejoin [v ": "]]
+    ]
+    if all [m/kind = 'fragment  m/name] [
+        foreach [x n] uses-of ms m/name [append changes value-change d n/block n/use-at + 1 form v]
+    ]
+    apply-changes d/text changes
+]
+
+delete-machine-text: function ["The text without a machine or fragment" d [object!] m [object!]] [
+    unless at: machine-head d m [return none]
+    i: at/2 + either set-word? pick at/1 at/2 [1] [0]
+    cut d/text range-span d at/1 at/2 i + either m/kind = 'fragment [2] [1]
+]
+
+new-fragment-code: function ["The code of a new fragment, named so that no machine or fragment has its name" ms [block!]] [
+    names: collect [foreach m ms [if m/name [keep m/name]]]
+    name: 'fragment-1
+    k: 1
+    while [find names name] [k: k + 1  name: to word! rejoin ["fragment-" k]]
+    rejoin [name ": fragment [] [" newline "    initial start" newline "    state start []" newline "]" newline]
+]
+
+; --- the edits of a state that uses one ----------------------------------------------------------------
+
+set-use: function [
+    "The text with a state using a fragment by name, or using none for none"
+    d [object!] m [object!] id [integer!] name
+] [
+    n: machine-node m id
+    case [
+        all [none? name  n/use-at] [apply-changes d/text cut-change d n/block n/use-at either n/with-at [n/with-at + 1] [n/use-at + 1]]
+        none? name [d/text]
+        n/use-at [apply-changes d/text value-change d n/block n/use-at + 1 form name]
+        true [set-state-word d m id 'use form name]
+    ]
+]
+
+use-with-value: function ["What a state gives the blanks of the fragment it uses, as written inside with's block, or none" d [object!] m [object!] id [integer!]] [
+    n: machine-node m id
+    unless all [n/with-at  block? pick n/block n/with-at + 1] [return none]
+    s: span-of d n/block n/with-at + 1
+    copy/part at d/text s/x + 1 s/y - 2
+]
+
+set-use-with: function [
+    "The text with what a state gives the blanks of its fragment: work: [charge] check: [data/ok]; none or empty takes with out"
+    d [object!] m [object!] id [integer!] code
+] [
+    n: machine-node m id
+    empty: any [none? code  empty? trim copy code]
+    case [
+        all [empty  n/with-at] [apply-changes d/text cut-change d n/block n/with-at n/with-at + 1]
+        empty [d/text]
+        n/with-at [apply-changes d/text value-change d n/block n/with-at + 1 rejoin ["[" trim copy code "]"]]
+        n/use-at [
+            s: span-of d n/block n/use-at + 1
+            splice d/text s/x + s/y 0 rejoin [" with [" trim copy code "]"]
+        ]
+        true [none]
+    ]
+]
+
+; --- the blanks of a fragment ----------------------------------------------------------------------------
+
+fragment-spec-value: function ["A fragment's blanks as written inside its spec block" d [object!] m [object!]] [
+    s: block-span d m/spec
+    copy/part at d/text s/x + 1 s/y - 2
+]
+
+set-fragment-spec: function ["The text with a fragment's blanks: work [block!] check [block!]" d [object!] m [object!] code [string!]] [
+    s: block-span d m/spec
+    splice d/text s/x s/y rejoin ["[" trim copy code "]"]
+]

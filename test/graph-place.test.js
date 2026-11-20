@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 
 // text is measured on a canvas in the browser: here every character is 7 wide
 globalThis.document = { createElement: () => ({ getContext: () => ({ measureText: s => ({ width: 7 * s.length }) }) }) };
-const { arrange, placesOf, route, cornerOf } = await import('../editor/graph-place.js');
+const { arrange, placesOf, route, cornerOf, unplacedInsides } = await import('../editor/graph-place.js');
 
 const graph = {
   name: 'repair',
@@ -99,4 +99,44 @@ test('ways: two between the same states bend apart, one back to its state loops'
   assert.notDeepEqual([a.label.x, a.label.y], [b.label.x, b.label.y]);
   assert.match(ways.find(w => w.id === 'w1.4').d, /C/);
   assert.equal(ways.filter(w => w.start).length, 2);
+});
+
+test('a state that uses a fragment is drawn wide enough for its mark, and what it shows of it is placed on the fragment only', () => {
+  const g = {
+    name: 'order',
+    nodes: [
+      { id: 'm2.1', name: 'order', kind: 'machine', parent: null },
+      { id: 's2.2', name: 'charging', kind: 'state', parent: 'm2.1', initial: true, uses: 'retry', x: 40, y: 40 },
+      { id: 'u2.2:2', name: 'attempt', kind: 'state', parent: 's2.2', initial: true, fixed: true, owner: 's2.2', x: 30, y: 40 },
+    ],
+    ways: [],
+  };
+  const closed = { ...g, nodes: g.nodes.slice(0, 2) };
+  const rel = new Map(closed.nodes.filter(n => n.parent).map(n => [n.id, { x: n.x, y: n.y }]));
+  const box = arrange(closed, rel).boxes.find(b => b.id === 's2.2');
+  assert.equal(box.w, 7 * 'charging ◇ retry'.length + 32);
+  const all = new Map(g.nodes.filter(n => n.parent).map(n => [n.id, { x: n.x, y: n.y }]));
+  const arr = arrange(g, all);
+  assert.ok(arr.boxes.find(b => b.id === 'u2.2:2'));
+  assert.equal(arr.boxes.find(b => b.id === 's2.2').kind, 'group');
+  assert.deepEqual(placesOf(g, arr), ['s2.2', 40, 40]);
+});
+
+test('what a state shows of a fragment with no places is laid out on its own, the state at its root', () => {
+  const g = {
+    name: 'order',
+    nodes: [
+      { id: 'm2.1', name: 'order', kind: 'machine', parent: null },
+      { id: 's2.2', name: 'charging', kind: 'state', parent: 'm2.1', uses: 'retry', x: 40, y: 40 },
+      { id: 'u2.2:2', name: 'attempt', kind: 'state', parent: 's2.2', fixed: true, owner: 's2.2' },
+      { id: 'u2.2:3', name: 'done', kind: 'final', parent: 's2.2', fixed: true, owner: 's2.2' },
+    ],
+    ways: [{ id: 'v2.2:1', from: 'u2.2:2', to: ['u2.2:3'], fixed: true, owner: 's2.2' }, { id: 'w2.1', from: 's2.2', to: ['s2.2'] }],
+  };
+  const [sub, more] = unplacedInsides(g, new Map([['s2.2', { x: 40, y: 40 }]]));
+  assert.equal(more, undefined);
+  assert.equal(sub.name, 's2.2');
+  assert.deepEqual(sub.nodes.map(n => [n.id, n.parent]), [['s2.2', null], ['u2.2:2', 's2.2'], ['u2.2:3', 's2.2']]);
+  assert.deepEqual(sub.ways.map(w => w.id), ['v2.2:1']);
+  assert.deepEqual(unplacedInsides(g, new Map([['u2.2:2', { x: 0, y: 0 }], ['u2.2:3', { x: 0, y: 0 }]])), []);
 });

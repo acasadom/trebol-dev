@@ -1,0 +1,167 @@
+Trebol [
+    title: "The designer's fragments: listed with the machines, drawn on their own, seen inside the states that use them"
+]
+
+; Run by app.trb (do), after machines-view.trb, so it shares its words. A fragment is edited on its own
+; drawing, as a machine is. A state that uses one is drawn with its name; opened, the fragment's states
+; and ways are drawn inside it as they are on the fragment's drawing, to be seen and not changed there:
+; they are not written in that state. Their ids say so: u<k>.<state>:<id>, v<k>.<state>:<id> for ways,
+; one :<id> more for each fragment used inside another.
+
+opened: []      ; ids of the states that use a fragment and are shown open: ["s1.3" ...]
+
+toggle-open: function ["Opens or closes what a state that uses a fragment shows" id [string!]] [
+    either find opened id [remove find opened id] [append opened id]
+    draw-machine
+    fill-mprops
+]
+
+; read again, only the states that still use a fragment stay open
+prune-opened: function [] [
+    still: collect [
+        foreach id opened [
+            p: canvas-place id
+            n: all [p  m: pick ms p/1  p/2 <= length? m/nodes  machine-node m p/2]
+            if all [n  n/uses] [keep id]
+        ]
+    ]
+    set 'opened still
+]
+
+open-fragment: function ["Chooses the drawing of a fragment, by name" name] [
+    if string? name [name: to word! name]
+    k: 0
+    foreach m ms [
+        k: k + 1
+        if all [m/kind = 'fragment  m/name = name] [
+            set 'picked reduce [k 1 'machine]
+            machine-tree/selected: machine-node-of tree-id picked machine-tree/data
+            mark-machine
+            draw-machine
+            fill-mprops
+            exit
+        ]
+    ]
+]
+
+inside-id: function [prefix [string!] parent [string!] id [integer!]] [either id = 1 [parent] [rejoin ["u" prefix ":" id]]]
+
+; The nodes and ways a fragment adds inside the state that uses it, for graph-data: [nodes ways].
+; owner is the state's id in the drawing; seen keeps a fragment that uses itself from going on forever.
+fragment-inside: function [owner [string!] prefix [string!] parent [string!] f [object!] seen [block!]] [
+    nodes: copy []  ways: copy []
+    if find seen f/name [return reduce [nodes ways]]
+    seen: append copy seen f/name
+    places: machine-places text machine-key d f
+    foreach n next f/nodes [
+        path: machine-path f n/id
+        xy: none
+        foreach [s spot] places [if path = to block! s [xy: spot]]
+        p: machine-node f n/parent
+        append nodes make map! reduce [
+            'x either xy [xy/x] [none]
+            'y either xy [xy/y] [none]
+            'id inside-id prefix parent n/id
+            'name form n/name
+            'kind form n/kind
+            'parent inside-id prefix parent n/parent
+            'initial to logic! p/initial = n/name
+            'uses either n/uses [form n/uses] [none]
+            'fixed true
+            'owner owner
+        ]
+        if all [n/uses  g: fragment-named ms n/uses] [
+            more: fragment-inside owner rejoin [prefix ":" n/id] inside-id prefix parent n/id g seen
+            append nodes more/1
+            append ways more/2
+        ]
+    ]
+    foreach w f/ways [
+        if src: way-source f w [
+            append ways make map! reduce [
+                'id rejoin ["v" prefix ":" w/id]
+                'from inside-id prefix parent src
+                'to collect [foreach t way-targets f w [if t [keep inside-id prefix parent t]]]
+                'label way-label w
+                'events either w/events [form w/events] [""]
+                'fixed true
+                'owner owner
+            ]
+        ]
+    ]
+    reduce [nodes ways]
+]
+
+; --- the properties ------------------------------------------------------------------------------
+
+fragment-props-code: function [m [object!]] [
+    used: (length? uses-of ms m/name) / 2
+    compose/deep [
+        code (rejoin [either m/name [rejoin [m/name ": "]] [""] "fragment"])
+        text small muted (rejoin [
+            "A piece of machine made once, which states of machines use. "
+            either used = 0 ["No state uses it yet."] [rejoin [used either used = 1 [" state uses it."] [" states use it."]]]
+        ])
+        field "name" "the word it is set to" with [value: (either m/name [form m/name] [""])] on-change [machine-act 'machine-name value]
+        (code-field "blanks" "what each use fills in, with the types it takes: work [block!] check [block!]" 'spec fragment-spec-value d m)
+        button #trash "Delete" danger [machine-act 'delete-machine none]
+    ]
+]
+
+use-props-code: function [m [object!] n [object!]] [
+    names: collect [foreach f fragments-of ms [if all [f/name  not same? f m] [keep form f/name]]]
+    if empty? names [return copy []]
+    out: compose/deep [
+        choice "use" [(append copy ["(none)"] names)] with [value: (either n/uses [form n/uses] ["(none)"])]
+            on-change [machine-act 'use value]
+    ]
+    if n/uses [
+        f: fragment-named ms n/uses
+        help: either f [rejoin ["the blanks of " n/uses ": " fragment-spec-value d f]] ["blank: value for each blank"]
+        append out code-field "with" help 'use-with use-with-value d m n/id
+        append out compose/deep [
+            row [
+                button #eye (either find opened rejoin ["s" picked/1 "." n/id] ["Close"] ["Open"]) small
+                    [toggle-open (rejoin ["s" picked/1 "." n/id])]
+                button #edit (rejoin ["Edit " n/uses]) small [open-fragment (form n/uses)]
+            ]
+        ]
+    ]
+    out
+]
+
+; --- trying -------------------------------------------------------------------------------------
+
+drawn-state: function [
+    "The id in the drawing of a state the engine names by its path: inside a state that uses a fragment, the fragment's state when it is open, else the state itself"
+    k [integer!] m [object!] path [block!]
+] [
+    id: 1
+    while [not empty? path] [
+        unless c: state-child m id first path [break]
+        id: c
+        path: next path
+        n: machine-node m id
+        if all [n/uses  not empty? path] [
+            owner: rejoin ["s" k "." id]
+            unless find opened owner [return owner]
+            prefix: rejoin [k "." id]
+            f: m
+            seen: copy []
+            while [all [n/uses  not empty? path  f: fragment-named ms n/uses  not find seen f/name]] [
+                append seen f/name
+                fid: 1
+                while [all [not empty? path  c: state-child f fid first path]] [
+                    fid: c
+                    path: next path
+                    n: machine-node f fid
+                    prefix: rejoin [prefix ":" fid]
+                    if n/uses [break]
+                ]
+                if any [empty? path  not n/uses] [break]
+            ]
+            return rejoin ["u" prefix]
+        ]
+    ]
+    either id = 1 [none] [rejoin ["s" k "." id]]
+]

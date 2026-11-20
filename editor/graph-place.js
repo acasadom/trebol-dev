@@ -3,7 +3,7 @@
 // or ELK's when the machine has none). A box with states inside is as big as they need, its name on top: a state
 // put past its left or top edge makes it grow that way. A state with no place is put to the right of the others.
 // Every point here is in the drawing's coordinates, the machine's corner at 0,0.
-import { HEAD, LABEL_FONT, textWidth } from './graph-draw.js';
+import { HEAD, LABEL_FONT, shownName, textWidth } from './graph-draw.js';
 
 const PAD = { l: 14, t: HEAD + 8, r: 14, b: 14 };      // the room inside a box around its states
 const ROOT = { l: 24, t: 24, r: 24, b: 24 };           // and around the machine's
@@ -49,7 +49,7 @@ function measure(graph, kids, n, rel, skip, depth) {
   const all = kids.get(n.id) ?? [];
   const root = n.parent == null;
   if (!all.length && !root) {
-    const { w, h } = leafSize(n.name);
+    const { w, h } = leafSize(shownName(n));
     return { box: { x: 0, y: 0, w, h }, items: [{ id: n.id, kind: n.kind, x: 0, y: 0, w, h, depth }], dots: [] };
   }
   const pad = root ? ROOT : PAD;
@@ -92,7 +92,7 @@ function measure(graph, kids, n, rel, skip, depth) {
     minX = Math.min(minX, dot.x - 6); minY = Math.min(minY, dot.y - 6);
     maxX = Math.max(maxX, dot.x + 6); maxY = Math.max(maxY, dot.y + 6);
   }
-  const label = root ? '' : n.name;
+  const label = root ? '' : shownName(n);
   const minW = root ? (all.length < 3 ? 320 : 0) : Math.max(64, textWidth(label) + 28);
   const minH = root ? (all.length < 3 ? 180 : 0) : HEAD + 14;
   const box = boxes.length
@@ -141,11 +141,25 @@ export function placesOf(graph, arranged, moved = null, into = null) {
   const byId = new Map(arranged.boxes.map(b => [b.id, b]));
   const out = [];
   for (const n of graph.nodes) {
-    if (n.parent == null) continue;
+    // what a state shows of the fragment it uses is not placed here: it is placed on the fragment's drawing
+    if (n.parent == null || n.fixed) continue;
     const b = byId.get(n.id), p = cornerOf(graph, arranged, n.id === moved ? into : n.parent);
     if (b && p) out.push(n.id, Math.round(b.x - p.x), Math.round(b.y - p.y));
   }
   return out;
+}
+
+/**
+ * What states show of the fragments they use and has no places yet: a graph for each such state, the state
+ * at its root, to be laid out on its own. Its name is the state's id.
+ */
+export function unplacedInsides(graph, rel) {
+  const owners = new Set(graph.nodes.filter(n => n.fixed && !rel.has(n.id)).map(n => n.owner));
+  return [...owners].map(owner => ({
+    name: owner,
+    nodes: [{ ...graph.nodes.find(n => n.id === owner), parent: null }, ...graph.nodes.filter(n => n.fixed && n.owner === owner)],
+    ways: graph.ways.filter(w => w.fixed && w.owner === owner),
+  }));
 }
 
 /** The places of ELK's layout: Map id -> {x, y}. */

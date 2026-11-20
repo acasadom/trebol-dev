@@ -28,7 +28,7 @@ state-text: function [m [object!]] [
 
 ; the spec as the file writes it, but shared with no tab and saved nowhere
 try-spec: function [m [object!]] [
-    spec: copy/deep m/block
+    spec: engine-block ms m
     words: select first m/nodes 'words
     places: sort/reverse collect [foreach [w i] words [if find [shared on-save] w [keep i]]]
     foreach i places [remove/part at spec i 2]
@@ -122,7 +122,16 @@ try-events: function [] [
 
 try-active: function [] [
     ; only in the drawing of the machine tried
-    either all [trying  try-k = either picked [picked/1] [1]] [collect [foreach id trying/on [keep rejoin ["s" try-k "." id]]]] [copy []]
+    unless all [trying  try-k = either picked [picked/1] [1]  m: pick ms try-k] [return copy []]
+    ; by path: the states of a fragment a state uses are the machine's own to the engine, and come
+    ; before the states written after that one, so the engine's ids are not the drawing's
+    out: copy []
+    foreach id trying/on [
+        path: copy []
+        while [id] [n: pick trying/nodes id  if n/parent [insert path n/name]  id: n/parent]
+        if x: drawn-state try-k m path [unless find out x [append out x]]
+    ]
+    out
 ]
 
 show-try: function [] [
