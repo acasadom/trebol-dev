@@ -8,25 +8,28 @@ events with buttons and watching where it goes, before any screen uses it.
 
 ## The machines of a file
 
-**Edit**, at the top, switches the window between the **Screens** of the file and its **Machines**. In
-*Machines* the structure lists every machine the file makes, with the states inside each one and the ways out of
-each state. The centre shows the chosen machine as a **drawing**. A file that makes none says so:
+**Machines**, at the top, switches the window from the **Screens** of the file to its machines. The structure
+lists every machine the file makes, with the states inside each one and the ways out of each state. The centre
+shows the chosen machine as a **drawing**, with a bar over it. A file that makes none says so:
 
 ![A file with no machines yet](img/machines-none.png)
 
-**Add**, then **Machine**, writes a new machine at the end of the file. It has one state, its initial one, as
-every machine needs. Choose the machine and type its name, `repair`, in **name**: the code now says
-`repair: machine [...]`, and the rest of the program calls it by that word.
+**New machine** writes a new machine at the end of the file. It has one state, its initial one, as every machine
+needs. Choose the machine and type its name, `repair`, in **name**: the code now says `repair: machine [...]`,
+and the rest of the program calls it by that word.
 
 ![A new machine](img/machine-added.png)
 
 ## States
 
-**Add** puts a **State**, a **Final** state or a **Parallel** one inside what is chosen: in the machine, or in a
-state, which then holds states of its own. The first state of a level is its initial state; the check box
-*initial* in a state's properties moves that to another. Rename `start` to `received`. Add a state `work`, choose
-it, and add `checking`, `waiting` and `fixing` inside it. Then choose the machine again and add a **Final** state
-`ready`, where a repair ends.
+**State**, **Final** and **Parallel**, on the bar, are dragged onto the drawing: the new state goes where it is let
+go, and its name is typed in place, on its box. Let go inside another state, it goes into that one, which then
+holds states of its own. A double click on an empty spot adds a state there too, and a double click on a name
+renames it. The first state of a level is its initial state; a right click on another one gives *Make it the
+initial state*, with *Add a state inside*, *Rename* and *Delete the state*.
+
+Rename `start` to `received`. Add a state `work`, and drop `checking`, `waiting` and `fixing` inside it. Then add a
+**Final** state `ready` beside `work`, where a repair ends.
 
 In the drawing a state is a rounded box. A state with states inside is a box around them, with its name on top. A
 final state has a double border, and a black dot points at the initial state of each level.
@@ -40,17 +43,17 @@ right.
 
 ## Ways
 
-A **way** takes the machine from one state to another when an event comes. To draw one, point at the **edge** of
-a state in the drawing: the pointer becomes a cross. Drag from there onto another state and let go. The designer
-writes `from received to work on go` and chooses the new way:
+A **way** takes the machine from one state to another when an event comes. Point at a state in the drawing: four
+dots show around it. Drag one of them onto another state and let go. The designer writes `from received to work
+on go`, chooses the new way and lets you type its event in place, over `go`:
 
 ![A way drawn from received to work](img/machine-drag.png)
 
-`go` is only a first name. In the way's properties, **on** says which events take it: type `start`. With
-`[start resume]`, either one does. **to** sends it to another state. In the same way draw `checking` to `waiting`
-on `need-parts`, `checking` to `fixing` on `fixable`, `waiting` to `fixing` on `arrived`, and `work` to `ready`
-on `fixed`. A way can also start from the structure: **Add a way**, in a state's properties, lists every state it
-can go to.
+Type `start` and press Enter. A dot dragged to an empty spot makes a new state there, and the way to it. In the
+same way draw `checking` to `waiting` on `need-parts`, `checking` to `fixing` on `fixable`, `waiting` to `fixing`
+on `arrived`, and `work` to `ready` on `fixed`. In the way's properties, **on** says which events take it: with
+`[start resume]`, either one does. **to** sends it to another state. A way can also start from the properties:
+**Add a way**, in a state's properties, lists every state it can go to.
 
 A way's properties have two boxes of code:
 
@@ -90,11 +93,16 @@ repair: machine [
 
 ## Where states go
 
-The first time a machine is drawn, the designer lays it out by itself. From then on each state stays where you
-put it: drag a state to any spot and let go. Drop it **inside** another state and it goes into that one, which
-grows to hold it; drag it out of its box and it leaves it, its ways going with it. A state with states inside
-takes them along. A new state goes where you drop it from the bar, where you double-click, or where you let go of
-a way dragged to an empty spot. The arrow keys move the chosen state, a little at a time, and more with Shift.
+Each state stays where you put it: drag a state to any spot and let go. Drop it **inside** another state and it
+goes into that one, which grows to hold it; drag it out of its box and it leaves it, its ways going with it. While
+a state is carried, the box it would go into is lit:
+
+![ready carried over work: let go there, it would go into work](img/machine-places.png)
+
+A state with states inside takes them along. A new state goes where you drop it from the bar, where you
+double-click, or where you let go of a way dragged to an empty spot. The arrow keys move the chosen state, a
+little at a time, and more with Shift; *Take it out of*, in its right-click menu, moves it out of the state it is
+in. **Undo** and **Redo**, on the bar, undo a move as they undo any other change.
 
 The designer keeps these places in the file, after everything else, in a comment, so the machine never sees
 them:
@@ -102,19 +110,20 @@ them:
 ```
 ; layout [
 ;     repair [
-;         received 40x30  work 40x120  work/checking 40x40  work/waiting 200x40  ready 400x30
+;         received 40x110  work 220x40  work/checking 40x60  work/waiting 260x60  work/fixing 150x180  ready 740x110
 ;     ]
 ; ]
 ```
 
 Each state is named by its path in the machine, and its place is the top-left corner of its box, counted from
 the box it is in. Rename a state, move it or delete it, and its place follows. A state with no place, as one you
-write yourself in the code, goes to the right of the others. **Tidy**, on the drawing's bar, lays the whole
-machine out again.
+write yourself in the code, goes to the right of the others. A machine with no places at all, as one written
+by hand, is laid out by the designer the first time it is drawn. **Tidy**, on the bar, lays the whole machine
+out again.
 
 ## Trying it
 
-**Try**, over the drawing, makes the machine and starts it, here in the designer. While it runs, the properties
+**Try**, at the end of the bar, makes the machine and starts it, here in the designer. While it runs, the properties
 give their place to it:
 
 - a button for each event its ways name. Those no way out takes now cannot be used: at the start only `start`
@@ -130,13 +139,79 @@ goes into `work`, then to `waiting`, and the data keeps the bike and the three p
 
 The machine's timers run as they would in the app. A state with a `timeout` also gets a button, *Time out*, which
 makes the time go off now, so a quarter of an hour need not pass to see what follows. A machine that reaches a
-final state says it ended. **Restart** starts it again from its initial state, and **Stop** ends the trial.
+final state says it ended. **Restart**, on the bar, starts it again from its initial state, and **Stop** ends the trial.
 Typing in the code stops it too, since the machine it ran is no longer the one written: a note says so, and
 *Try* makes it again.
 
 What the machine does while it is tried, its `on-enter` code or work it runs, really runs, in the designer's page.
 A shared machine (`shared`) is tried alone, without the app's other tabs, and its `on-save` is left out, so trying
 it saves nothing.
+
+## Pieces used again
+
+Before any work, the shop sends the customer the price and waits for a yes, sending it again if a day goes by
+with no answer. The shop will ask the same way when a repair needs more parts than planned. A shape that comes
+back is made once as a **fragment** (see [Pieces used again](../language/15-machines)): a piece of machine with
+blanks, which a state **uses** with the blanks filled in.
+
+**New fragment**, in the structure, writes one before the file's machines, since a machine can only use a
+fragment made before it. A fragment is listed with the machines and made on its own drawing, in the same way. Name it `approval`, and draw a state `asked` with a way to itself on
+`timeout`, and a state `agreed` it goes to on `yes`. In **blanks** write `ask [block!]`: each use gives code to
+`ask`, which says how the customer is asked. Give `asked` the `on-enter` code `ask` and the `timeout` `24:00`.
+`agreed` has no way out: when the machine gets there the fragment has done its work.
+
+![The approval fragment on its own drawing](img/machine-fragment.png)
+
+Back in `repair`, add a state `quote` between `received` and `work`: the way from `received` goes to `quote` now
+on `start`, and a way with no event goes from `quote` to `work`, taken when the fragment is done. In `quote`'s
+properties, **use** chooses the fragment, and **with** fills its blanks: `ask: [toast "Price sent"]`. The code
+says:
+
+```trebol
+approval: fragment [ask [block!]] [
+    initial asked
+    state asked [on-enter ask  timeout 24:00]
+    state agreed []
+    from asked to asked on timeout
+    from asked to agreed on yes
+]
+
+repair: machine [
+    data [bike: none  parts: 0]
+    initial received
+    state received []
+    state quote [use approval with [ask: [toast "Price sent"]]]
+    state work [
+        initial checking
+        state checking []
+        state waiting []
+        state fixing []
+        from checking to waiting on need-parts set [parts: event/count]
+        from checking to fixing on fixable
+        from waiting to fixing on arrived
+    ]
+    final ready
+    from received to quote on start set [bike: event/bike]
+    from quote to work
+    from work to ready on fixed
+]
+```
+
+In the drawing `quote` shows the fragment's name beside its own. **Open**, in its properties or its right-click
+menu, shows the fragment's states inside it, drawn dashed: they are there to be seen, and are changed on the
+fragment's own drawing, which **Edit approval** or a double click on them opens. Renaming the fragment renames
+it wherever it is used.
+
+![quote uses approval, open](img/machine-use.png)
+
+When the machine is tried, the fragment's states are lit as the machine's are. After `start`, the toast says
+*Price sent*, the machine is in `quote/asked`, and a *Time out asked* button sends the reminder without waiting
+a day:
+
+![Trying a machine through its fragment](img/machine-use-try.png)
+
+A blank left empty, or given something of a type it does not take, is a problem of the machine, shown under the
+drawing as any other.
 
 ## Problems
 
