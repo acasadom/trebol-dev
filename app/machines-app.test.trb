@@ -354,3 +354,7 @@ machines: does [choose "File" "repair.trb"  choose "Edit" "Machines"]
         to logic! find first try-lines "It does not start: no state raedy"
     ]
 ]
+
+"the title of the properties"
+[(title-lines "from received to quote on start") = "from received to quote on^/start"]
+[(title-lines "state paid") = "state paid"]

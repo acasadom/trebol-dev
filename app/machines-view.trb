@@ -29,6 +29,22 @@ show-editing: function [what [string!]] [
 
 ; --- the structure -----------------------------------------------------------------------------
 
+; the title at the top of the properties, its words on lines short enough for the panel, so it never scrolls
+title-lines: function ["A title broken into lines of at most 26 characters, between words" t [string!]] [
+    out: copy ""
+    line: 0
+    foreach w split t #" " [
+        case [
+            line = 0 []
+            line + 1 + (length? w) > 26 [append out newline  line: 0]
+            true [append out " "  line: line + 1]
+        ]
+        append out w
+        line: line + length? w
+    ]
+    out
+]
+
 state-title: function [m [object!] n [object!]] [
     t: rejoin [n/kind " " n/name]
     if n/uses [append t rejoin [" uses " n/uses]]
@@ -328,7 +344,7 @@ machine-props-code: function [] [
             n: picked-node
             p: machine-node m n/parent
             out: compose/deep [
-                code (state-title m n)
+                code (title-lines state-title m n)
                 text small muted (form to path! machine-path m n/id)
                 field "name" "word" with [value: (form n/name)] on-change [machine-act 'name value]
             ]
@@ -376,7 +392,7 @@ machine-props-code: function [] [
         way [
             w: picked-way
             out: compose/deep [
-                code (rejoin ["from " w/source " " way-title m w])
+                code (title-lines rejoin ["from " w/source " " way-title m w])
                 field "on" "the events it is taken on: start, or [start go]" with [value: (either w/events [form w/events] [""])]
                     on-change [machine-act 'events value]
             ]
