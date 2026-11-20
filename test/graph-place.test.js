@@ -101,6 +101,15 @@ test('ways: two between the same states bend apart, one back to its state loops'
   assert.equal(ways.filter(w => w.start).length, 2);
 });
 
+test('the label of a way back to its own state sits close beside its loop', () => {
+  const arr = arrange(graph, rel());
+  const box = arr.boxes.find(b => b.id === 's1.6');
+  const l = route(graph, arr).find(w => w.id === 'w1.4').label;
+  const left = l.x - l.w / 2;
+  assert.ok(left > box.x + box.w && left < box.x + box.w + 30, `left edge ${left}, box right ${box.x + box.w}`);
+  assert.ok(l.y > box.y - 30 && l.y < box.y + 10, `y ${l.y}, box top ${box.y}`);
+});
+
 test('a state that uses a fragment is drawn wide enough for its mark, and what it shows of it is placed on the fragment only', () => {
   const g = {
     name: 'order',

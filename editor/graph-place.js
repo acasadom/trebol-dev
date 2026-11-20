@@ -199,6 +199,14 @@ function across(outer, inner) {
   return [sides[0][1], sides[0][2]];
 }
 
+function bezier(p0, c1, c2, p3, t) {
+  const u = 1 - t;
+  return {
+    x: u * u * u * p0.x + 3 * u * u * t * c1.x + 3 * u * t * t * c2.x + t * t * t * p3.x,
+    y: u * u * u * p0.y + 3 * u * u * t * c1.y + 3 * u * t * t * c2.y + t * t * t * p3.y,
+  };
+}
+
 /**
  * The ways drawn between the boxes: [{id, d, tip: [from, to], label: {x, y, text} | null}], and one arrow from
  * each initial dot. Ways between the same two states bend apart; a way back to its own state loops over it.
@@ -227,8 +235,15 @@ export function route(graph, arranged) {
       const s = 14 + k * 10;
       const p0 = { x: a.x + a.w - 18 - k * 8, y: a.y }, p3 = { x: a.x + a.w, y: a.y + 14 + k * 4 };
       const c1 = { x: p0.x, y: p0.y - 30 - s }, c2 = { x: p3.x + 30 + s, y: p3.y };
+      // the label just beside the loop, at the right of its outermost point and as high as the loop's middle
+      let maxX = -Infinity, minY = Infinity;
+      for (let j = 0; j <= 20; j++) {
+        const q = bezier(p0, c1, c2, p3, j / 20);
+        maxX = Math.max(maxX, q.x);
+        minY = Math.min(minY, q.y);
+      }
       out.push({ id: w.id, d: `M${p0.x},${p0.y} C${c1.x},${c1.y} ${c2.x},${c2.y} ${p3.x},${p3.y}`, tip: [c2, p3],
-        label: label ? { x: p3.x + 12 + s + lw / 2, y: p0.y - 22 - s, w: lw, text: label } : null });
+        label: label ? { x: maxX + 4 + lw / 2, y: (minY + p3.y) / 2, w: lw, text: label } : null });
       continue;
     }
     let p0, p2;
