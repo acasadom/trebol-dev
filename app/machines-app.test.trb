@@ -328,3 +328,21 @@ machines: does [choose "File" "repair.trb"  choose "Edit" "Machines"]
     machines
     machine-problems/hidden
 ]
+
+"a machine's name"
+[
+    machines
+    click "repair: machine"
+    type "name" "fix"
+    see "fix: machine"
+    click "Save"
+    to logic! find written "fix: machine ["
+]
+[
+    machines
+    write-text head replace copy text "repair: machine" "machine"
+    click "machine"
+    type "name" "mend"
+    click "Save"
+    to logic! find written "^/mend: machine ["
+]

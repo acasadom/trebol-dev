@@ -276,6 +276,7 @@ machine-props-code: function [] [
             compose/deep [
                 code (rejoin [either m/name [rejoin [m/name ": "]] [""] "machine"])
                 text small muted "Add states to it with Add; ways go from one state to another."
+                field "name" "the word it is set to" with [value: (either m/name [form m/name] [""])] on-change [machine-act 'machine-name value]
                 (code-field "data" "its fields and their first values: parts: 0" 'data state-word-value d m 1 'data)
                 button #trash "Delete" danger [machine-act 'delete-machine none]
             ]
@@ -368,7 +369,7 @@ machine-act: function [what [word!] value] [
     n: picked-node
     w: picked-way
     id: picked/2
-    if find [name data outcome on-enter on-exit timeout run defer events where set] what [set 'keep-mprops true]
+    if find [name machine-name data outcome on-enter on-exit timeout run defer events where set] what [set 'keep-mprops true]
     t: switch what [
         name [all [string? value  v: attempt [load value]  word? v  rename-state d m id v]]
         initial [either value [set-initial d m id] [none]]
@@ -387,6 +388,27 @@ machine-act: function [what [word!] value] [
         history [set-state-word d m id 'no either value [none] ["history"]]
         way-to [add-way d m id to integer! skip form value 6 'go]
         delete [r: delete-state d m id  set 'picked none  r]
+        machine-name [
+            v: all [string? value  attempt [load value]]
+            r: none
+            if word? v [
+                foreach [blk sps own] d/blocks [
+                    repeat i length? blk [
+                        if same? pick blk i m/block [
+                            ; repair: machine [...], or machine [...] with no word yet
+                            r: either all [i > 2  set-word? pick blk i - 2] [
+                                s: span-of d blk i - 2
+                                splice d/text s/x s/y rejoin [v ":"]
+                            ] [
+                                s: span-of d blk i - 1
+                                splice d/text s/x 0 rejoin [v ": "]
+                            ]
+                        ]
+                    ]
+                ]
+            ]
+            r
+        ]
         delete-machine [
             r: none
             foreach [blk sps own] d/blocks [
