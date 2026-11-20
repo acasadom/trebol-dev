@@ -86,7 +86,8 @@ export const css = `
 .rubber { stroke: var(--tb-primary, #2563eb); stroke-width: 2; stroke-dasharray: 6 4; fill: none; pointer-events: none; }
 .ghost { position: fixed; z-index: 10; pointer-events: none; padding: 6px 14px; border: 1.5px dashed var(--tb-primary, #2563eb);
   border-radius: 9px; background: var(--tb-surface, #fff); color: var(--tb-text, #1c1c1c); font: ${FONT}; opacity: .9; }
-.inline { position: absolute; z-index: 5; box-sizing: border-box; height: 28px; padding: 0 6px; min-width: 80px;
+.naming > .name, .naming > .label, .naming:not(.group, .parallel) > :is(.box, .inner) { visibility: hidden; }
+.inline { position: absolute; z-index: 5; box-sizing: border-box; height: 28px; padding: 0 6px;
   border: 2px solid var(--tb-primary, #2563eb); border-radius: 6px; background: var(--tb-surface, #fff);
   color: var(--tb-text, #1c1c1c); font: ${FONT}; text-align: center; outline: none; }
 .menu { position: fixed; z-index: 20; min-width: 180px; padding: 4px; border: 1px solid var(--tb-border, #e7e5e4);

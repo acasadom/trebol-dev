@@ -472,18 +472,39 @@ class MachineGraph extends HTMLElement {
     const input = Object.assign(document.createElement('input'), { className: 'inline', value: was, spellcheck: false });
     input.setAttribute('aria-label', way ? 'The events the way is taken on' : 'The name of the state');
     if (way) input.placeholder = 'event';
-    // over its name, or its way's label, wherever the drawing has it now
+    // it takes the place of what it names, wherever the drawing has it now, so it never looks like a second
+    // state: a state's whole box, the head of a box with states inside, a way's label; the name drawn under
+    // it is hidden, and it grows to the sides when the name typed is longer
     const place = () => {
       const at = this.#el(id);
       if (!at) return false;
-      const spot = (way ? at.querySelector('.label-bg') ?? at.querySelector('.line') : at.querySelector('.name') ?? at.querySelector('.box')).getBoundingClientRect();
+      for (const g of this.#svg?.querySelectorAll('.naming') ?? []) g.classList.remove('naming');
+      at.classList.add('naming');
       const st = this.#stage.getBoundingClientRect();
-      const w = Math.max(110, spot.width + 32);
+      let spot, height, radius;
+      if (way) {
+        spot = (at.querySelector('.label-bg') ?? at.querySelector('.line')).getBoundingClientRect();
+        height = 28;
+        radius = 6;
+      } else {
+        const box = at.querySelector('.box');
+        const b = box.getBoundingClientRect();
+        const scale = b.width / (+box.getAttribute('width') || b.width || 1);
+        const head = at.classList.contains('group') || at.classList.contains('parallel');
+        spot = head ? { left: b.left + 4 * scale, top: b.top + 3 * scale, width: b.width - 8 * scale, height: (HEAD - 2) * scale } : b;
+        height = spot.height;
+        radius = (head ? 7 : 9) * scale;
+      }
+      input.style.height = `${height}px`;
+      input.style.borderRadius = `${radius}px`;
+      input.style.width = `${spot.width}px`;
+      const w = Math.max(spot.width, input.scrollWidth > input.clientWidth ? input.scrollWidth + 16 : 0, way ? 90 : 0);
       input.style.width = `${w}px`;
-      input.style.left = `${spot.left - st.left + this.#stage.scrollLeft + spot.width / 2 - w / 2}px`;
-      input.style.top = `${spot.top - st.top + this.#stage.scrollTop + spot.height / 2 - 14}px`;
+      input.style.left = `${Math.max(this.#stage.scrollLeft + 2, spot.left - st.left + this.#stage.scrollLeft + spot.width / 2 - w / 2)}px`;
+      input.style.top = `${spot.top - st.top + this.#stage.scrollTop + spot.height / 2 - height / 2}px`;
       return true;
     };
+    input.addEventListener('input', () => place());
     let done = false;
     // it closes when the person leaves it: a click elsewhere or Tab; the designer drawing its panels anew
     // may take the focus away, which gives it back
@@ -496,6 +517,7 @@ class MachineGraph extends HTMLElement {
       document.removeEventListener('pointerdown', away, true);
       this.#inline = null;
       input.remove();
+      for (const g of this.#svg?.querySelectorAll('.naming') ?? []) g.classList.remove('naming');
       const text = input.value.trim();
       if (keep && text && text !== was) this.#tell('rename', [id, text]);
       this.#stage.focus({ preventScroll: true });
