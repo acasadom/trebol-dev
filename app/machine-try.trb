@@ -41,7 +41,10 @@ try-machine: function ["Makes the chosen machine and starts it" ] [
     clear try-lines
     r: try [machine try-spec m]
     if error? r [
-        try-log rejoin ["It does not start: " r/message]
+        msg: r/message
+        if find/match msg "machine: " [msg: skip msg 9]
+        try-log rejoin ["It does not start: " msg]
+        toast first try-lines
         set 'trying none
         show-try
         exit
@@ -60,7 +63,7 @@ stop-try: function [why [string! none!]] [
     if trying [attempt [machine-engine/stop trying]]
     set 'trying none
     clear try-lines
-    if why [try-log why]
+    if why [try-log why  toast why]
     show-try
 ]
 
@@ -141,7 +144,15 @@ show-try: function [] [
                 ]
             ]
         ]
-        try-data/text: either trying/data [mold/only body-of trying/data] ["none"]
+        ; a field a line
+        try-data/text: either trying/data [
+            t: copy ""
+            foreach [w v] body-of trying/data [
+                unless empty? t [append t newline]
+                append t rejoin [mold w " " mold :v]
+            ]
+            t
+        ] ["none"]
     ]
     ; the last few: the drawing keeps the room
     try-history/pane: layout/only collect [foreach l copy/part try-lines 12 [keep compose [text small muted (l)]]]

@@ -346,3 +346,14 @@ machines: does [choose "File" "repair.trb"  choose "Edit" "Machines"]
     click "Save"
     to logic! find written "^/mend: machine ["
 ]
+[
+    ; a machine that does not start says why
+    machines
+    write-text head replace copy text "from work to ready on fixed" "from work to raedy on fixed"
+    click "Try"
+    all [
+        none? trying
+        try-panel/hidden
+        to logic! find first try-lines "It does not start: no state raedy"
+    ]
+]

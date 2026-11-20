@@ -43,6 +43,32 @@ const tabs = `        booking "Booking" [id] [
 `;
 const note = `    note "Bicycle repairs, done right."\n`;
 
+const ways = `        from checking to waiting on need-parts set [parts: event/count]
+        from checking to fixing on fixable
+        from waiting to fixing on arrived
+`;
+const repair = (outer, inner = ways) => `repair: machine [
+    data [bike: none  parts: 0]
+    initial received
+    state received []
+    state work [
+        initial checking
+        state checking []
+        state waiting []
+        state fixing []
+${inner}    ]
+    final ready
+${outer}]
+
+view [
+    title "Cog & Chain"
+]
+`;
+const M = head + repair(`    from received to work on start set [bike: event/bike]
+    from work to ready on fixed
+`);
+const machines = ['click', 'Machines'];
+
 const shots = {
   window: [A, []],
   'add-menu': [A, [['tree', 'view'], ['click', 'Add'], ['click', 'Layout']]],
@@ -58,6 +84,14 @@ const shots = {
   'tabs-rows': [head + screens(tabs), [['tree', 'rows parts']]],
   'own-style': [head + style + screens(tabs), [['tree', 'title'], ['click', 'Add'], ['click', 'This file']]],
   'does-not-load': [head + style + screens(tabs, note).replace('            form [\n', '            form \n'), []],
+  'machines-none': [A, [machines]],
+  'machine-added': [A, [machines, ['click', 'Add'], ['click', 'Machine']]],
+  'machine-states': [head + repair('', ''), [machines, ['tree', 'state work']]],
+  'machine-drag': [head + repair(`    from work to ready on fixed
+`), [machines, ['drag', 'received', 'work']]],
+  'machine-way': [M, [machines, ['tree', 'to waiting on need-parts']]],
+  'machine-try': [M, [machines, ['click', 'Try'], ['type', 'Event fields', 'bike: "Ada\'s road bike"  count: 3'], ['click', 'start'], ['click', 'need-parts']]],
+  'machine-problem': [M.replace('from work to ready on fixed', 'from work to raedy on fixed'), [machines]],
   problems: [head + style + screens(tabs, note).replace('field customer "Customer" required', 'field customer "Customer" requird'), []],
 };
 
@@ -96,6 +130,19 @@ async function take(name, [text, steps]) {
       if (op === 'click') { await mouse('mousePressed', p); await mouse('mouseReleased', p); }
     } else if (op === 'scroll') {
       await evaluate(`(() => { const e = [...document.querySelectorAll('*')].find(e => e.children.length === 0 && e.offsetParent !== null && e.textContent.trim().startsWith(${JSON.stringify(a)})); e.scrollIntoView({ block: 'start' }); let b = e.parentElement; while (b && b.scrollHeight <= b.clientHeight) b = b.parentElement; b?.scrollBy(0, -16); return 1 })()`);
+    } else if (op === 'drag') {
+      // from the right edge of a state in the drawing onto the middle of another
+      const box = n => `(() => { const g = [...document.querySelector('tb-machine-graph').shadowRoot.querySelectorAll('.node')]
+        .find(g => g.querySelector('.name')?.textContent === ${n}); const r = g.querySelector('.box').getBoundingClientRect();
+        return [r.x, r.y, r.width, r.height] })()`;
+      const [x, y, w, h] = await evaluate(box(JSON.stringify(a)));
+      const [x2, y2, w2] = await evaluate(box(JSON.stringify(b)));
+      const from = [x + w - 3, y + h / 2], to = [x2 + w2 / 2, y2 + 14];
+      await mouse('mouseMoved', from);
+      await mouse('mousePressed', from);
+      for (let i = 1; i <= 8; i++) await send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: from[0] + (to[0] - from[0]) * i / 8, y: from[1] + (to[1] - from[1]) * i / 8, button: 'left', buttons: 1 });
+      await mouse('mouseReleased', to);
+      await sleep(1200);
     } else if (op === 'type') {
       await evaluate(`(() => { const l = [...document.querySelectorAll('label')].find(l => l.textContent.trim() === ${JSON.stringify(a)}); const i = l.control ?? l.parentElement.querySelector('input'); i.focus(); return 1 })()`);
       await send('Input.insertText', { text: b });
