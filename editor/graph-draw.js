@@ -54,7 +54,7 @@ export const css = `
 .stage > svg { display: block; user-select: none; touch-action: none; overflow: visible; }
 .node.lifted { opacity: .85; }
 .node.lifted > .box { stroke-dasharray: 4 3; }
-.hint { margin: 12px auto 4px; max-width: 420px; text-align: center; color: var(--tb-muted, #6b7280); font-size: 13px; pointer-events: none; }
+.hint { position: absolute; left: 0; right: 0; bottom: 12px; margin: 0 auto; max-width: 420px; text-align: center; color: var(--tb-muted, #6b7280); font-size: 13px; pointer-events: none; }
 .empty { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 40px 16px; color: var(--tb-muted, #6b7280); text-align: center; }
 .empty button { height: 34px; padding: 0 14px; border: 1px solid var(--tb-border-strong, #a8a29e); border-radius: var(--tb-radius, 8px);
   background: var(--tb-surface, #fff); color: var(--tb-text, #1c1c1c); font: inherit; cursor: pointer; }
