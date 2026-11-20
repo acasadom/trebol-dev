@@ -149,3 +149,41 @@ test('what a state shows of a fragment with no places is laid out on its own, th
   assert.deepEqual(sub.ways.map(w => w.id), ['v2.2:1']);
   assert.deepEqual(unplacedInsides(g, new Map([['u2.2:2', { x: 0, y: 0 }], ['u2.2:3', { x: 0, y: 0 }]])), []);
 });
+
+test('a state opened to show its fragment pushes aside the states it would cover, in the drawing only', () => {
+  const g = {
+    name: 'order',
+    nodes: [
+      { id: 'm2.1', name: 'order', kind: 'machine', parent: null },
+      { id: 's2.2', name: 'charging', kind: 'state', parent: 'm2.1', uses: 'retry' },
+      { id: 'u2.2:2', name: 'attempt', kind: 'state', parent: 's2.2', fixed: true, owner: 's2.2' },
+      { id: 'u2.2:3', name: 'done', kind: 'final', parent: 's2.2', fixed: true, owner: 's2.2' },
+      { id: 's2.3', name: 'paid', kind: 'state', parent: 'm2.1' },
+      { id: 's2.4', name: 'sent', kind: 'state', parent: 'm2.1' },
+      { id: 's2.5', name: 'kept', kind: 'state', parent: 'm2.1' },
+      { id: 's2.6', name: 'later', kind: 'state', parent: 'm2.1' },
+    ],
+    ways: [],
+  };
+  // charging is 144 wide closed; paid right of it, sent right of paid, kept below it, later far right
+  const rel = new Map(Object.entries({
+    's2.2': { x: 40, y: 40 }, 'u2.2:2': { x: 30, y: 40 }, 'u2.2:3': { x: 260, y: 160 },
+    's2.3': { x: 220, y: 40 }, 's2.4': { x: 320, y: 40 }, 's2.5': { x: 40, y: 100 }, 's2.6': { x: 900, y: 40 },
+  }));
+  const arr = arrange(g, rel);
+  const at = id => { const b = box(arr, id); return [b.x, b.y]; };
+  const open = box(arr, 's2.2');
+  for (const id of ['s2.3', 's2.4', 's2.5']) {
+    const b = box(arr, id);
+    assert.ok(!(b.x < open.x + open.w && open.x < b.x + b.w && b.y < open.y + open.h && open.y < b.y + b.h), id);
+    for (const o of ['s2.3', 's2.4', 's2.5'].filter(x => x !== id)) {
+      const c = box(arr, o);
+      assert.ok(!(b.x < c.x + c.w && c.x < b.x + b.w && b.y < c.y + c.h && c.y < b.y + b.h), `${id} ${o}`);
+    }
+  }
+  assert.equal(at('s2.5')[0], 40);   // below: pushed down only
+  assert.equal(at('s2.3')[1], 40);   // right: pushed right only
+  assert.ok(at('s2.3')[0] > 220 && at('s2.4')[0] > at('s2.3')[0] && at('s2.5')[1] > 100);
+  assert.deepEqual(at('s2.6'), [900, 40]);   // not covered: stays
+  assert.deepEqual(placesOf(g, arr), ['s2.2', 40, 40, 's2.3', 220, 40, 's2.4', 320, 40, 's2.5', 40, 100, 's2.6', 900, 40]);
+});

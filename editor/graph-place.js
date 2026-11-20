@@ -40,6 +40,36 @@ function dotBeside(b, others) {
   return { x: side.x, y: side.y, tx: side.tx, ty: side.ty };
 }
 
+/** Whether a state shows the fragment it uses: what it shows of it is inside it. */
+const opened = (kids, n) => (kids.get(n.id) ?? []).some(k => k.fixed && k.owner === n.id);
+
+/**
+ * A state opened to show its fragment is bigger than it is closed: the states of its box it would then cover are
+ * pushed right (those right of it closed) or down (those below it), and those they would cover in turn, in the
+ * drawing only. A pushed box keeps how far in `push`, which placesOf takes off: the places in the file stay.
+ * spots: [{c: node, m: measured, b: box}] from the corner of the box they are in.
+ */
+function pushAside(spots, kids) {
+  const queue = spots.filter(s => opened(kids, s.c)).map(s => ({ s, was: { x: s.b.x, y: s.b.y, ...leafSize(shownName(s.c)) } }));
+  for (let turns = 0; queue.length && turns < 1000; turns++) {
+    const { s: g, was } = queue.shift();
+    for (const o of spots) {
+      if (o === g || !meets(g.b, o.b)) continue;
+      let dx = 0, dy = 0;
+      if (o.b.x >= was.x + was.w) dx = g.b.x + g.b.w - (was.x + was.w);
+      else if (o.b.y >= was.y + was.h) dy = g.b.y + g.b.h - (was.y + was.h);
+      if (dx <= 0 && dy <= 0) continue;
+      const before = { ...o.b };
+      shift([o.b], dx, dy);
+      shift(o.m.items, dx, dy);
+      shift(o.m.dots, dx, dy);
+      const own = o.m.items.find(b => b.id === o.c.id);
+      own.push = { x: (own.push?.x ?? 0) + dx, y: (own.push?.y ?? 0) + dy };
+      queue.push({ s: o, was: before });
+    }
+  }
+}
+
 /**
  * A node and what is inside it, from its own corner: {box: {x, y, w, h}, items: [box...], dots: [{x, y, to}]}.
  * A box is {id, kind, x, y, w, h, depth}; kind is machine, state, group, parallel or final.
@@ -60,13 +90,17 @@ function measure(graph, kids, n, rel, skip, depth) {
     (rel.has(c.id) ? placed : loose).push([c, m]);
   }
   const boxes = [];   // [node, its box from n's corner]
-  for (const [c, m] of placed) {
+  const spots = placed.map(([c, m]) => {
     const r = rel.get(c.id);
     shift(m.items, r.x - m.box.x, r.y - m.box.y);
     shift(m.dots, r.x - m.box.x, r.y - m.box.y);
+    return { c, m, b: { x: r.x, y: r.y, w: m.box.w, h: m.box.h } };
+  });
+  pushAside(spots, kids);
+  for (const { c, m, b } of spots) {
     items.push(...m.items);
     dots.push(...m.dots);
-    boxes.push([c, { x: r.x, y: r.y, w: m.box.w, h: m.box.h }]);
+    boxes.push([c, b]);
   }
   let x = boxes.length ? Math.max(...boxes.map(([, b]) => b.x + b.w)) + GAP : pad.l + (n.kind !== 'parallel' ? DOT : 0);
   const y = boxes.length ? Math.min(...boxes.map(([, b]) => b.y)) : pad.t;
@@ -144,7 +178,9 @@ export function placesOf(graph, arranged, moved = null, into = null) {
     // what a state shows of the fragment it uses is not placed here: it is placed on the fragment's drawing
     if (n.parent == null || n.fixed) continue;
     const b = byId.get(n.id), p = cornerOf(graph, arranged, n.id === moved ? into : n.parent);
-    if (b && p) out.push(n.id, Math.round(b.x - p.x), Math.round(b.y - p.y));
+    // pushed aside by an opened state: its place is where it is with that state closed
+    const px = b?.push?.x ?? 0, py = b?.push?.y ?? 0;
+    if (b && p) out.push(n.id, Math.round(b.x - px - p.x), Math.round(b.y - py - p.y));
   }
   return out;
 }

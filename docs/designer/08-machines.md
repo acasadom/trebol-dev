@@ -199,7 +199,9 @@ repair: machine [
 
 In the drawing `quote` shows the fragment's name beside its own. **Open**, in its properties or its right-click
 menu, shows the fragment's states inside it, drawn dashed: they are there to be seen, and are changed on the
-fragment's own drawing, which **Edit approval** or a double click on them opens. Renaming the fragment renames
+fragment's own drawing, which **Edit approval** or a double click on them opens. An open state is bigger, so
+the states it would cover move right or down while it is open; their places in the file stay, and closing it
+puts them back. Renaming the fragment renames
 it wherever it is used.
 
 ![quote uses approval, open](img/machine-use.png)
