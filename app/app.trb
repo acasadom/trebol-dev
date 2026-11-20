@@ -18,6 +18,7 @@ import %history.trb
 import %move.trb
 import %machines.trb
 import %machine-edits.trb
+import %machine-moves.trb
 import %trebol-code.js
 import %machine-graph.js
 
@@ -392,6 +393,7 @@ add-face: function [item [word!]] [
 ; the machines of the file: their structure, properties and code (shares these words)
 do %machines-view.trb
 do %machine-try.trb
+do %machine-canvas.trb
 
 ; the Add menu comes from the palette
 view compose/deep/only [
@@ -420,9 +422,8 @@ view compose/deep/only [
                 on-reorder [reorder event/parent event/from event/to]
                 on-drop [drop-face event/dropped event/parent event/index]
             global machine-side: column hidden [
-                button #plus "Add" small menu ["State" state "Final state" final "Parallel state" parallel --- "Machine" machine]
-                    on-menu [machine-add event/picked]
-                global machine-none: text muted "This file makes no machines. Add one with Add, Machine."
+                button #plus "New machine" small [machine-add 'machine]
+                global machine-none: text muted "This file makes no machines yet. Its states and ways are made on the drawing."
                 global machine-tree: tree [name] on-select [pick-machine row/id]
             ]
         ]
@@ -437,15 +438,11 @@ view compose/deep/only [
                 global problems: table [at "Where" message "Problem"] hidden
             ]
             global machine-pane: panel "Drawing" hidden [
-                row [
-                    global try-start: button small #pointer "Try" [try-machine]
-                    global try-running: row hidden [
-                        button small #refresh "Restart" [try-machine]
-                        button small #close "Stop" [stop-try none]
-                    ]
-                ]
-                global machine-drawing: widget <tb-machine-graph> fit [graph: none selected: none]
-                    on-pick [pick-machine event/detail] on-connect [machine-connect event/detail]
+                global machine-drawing: widget <tb-machine-graph> fit [graph: none selected: none editing: none trying: false]
+                    on-pick [pick-machine event/detail] on-add [canvas-add event/detail] on-connect [canvas-connect event/detail]
+                    on-grow [canvas-grow event/detail] on-rename [canvas-rename event/detail] on-remove [canvas-remove event/detail]
+                    on-initial [canvas-initial event/detail] on-move [canvas-move event/detail]
+                    on-undo [undo-change] on-redo [redo-change] on-try [try-machine] on-restart [try-machine] on-stop [stop-try none]
                 global machine-problems: table [at "Where" message "Problem"] hidden
             ]
             global code-pane: panel "Code" pad 2 [

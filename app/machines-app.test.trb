@@ -96,16 +96,14 @@ machines: does [choose "File" "repair.trb"  choose "Edit" "Machines"]
 "adding and deleting"
 [
     machines
-    click "repair: machine"
-    pick-menu "Add" "State"
+    canvas-add ["state" "m1.1"]
     see "state state"
     click "Save"
     to logic! find written "final ready^/    state state []^/"
 ]
 [
     machines
-    click "state work"
-    pick-menu "Add" "Final state"
+    canvas-add ["final" "s1.3"]
     see "final done"
     click "Save"
     to logic! find written "state fixing []^/        final done^/"
@@ -130,8 +128,8 @@ machines: does [choose "File" "repair.trb"  choose "Edit" "Machines"]
     ; a file with none gets one
     choose "File" "app.trb"
     choose "Edit" "Machines"
-    see "This file makes no machines. Add one with Add, Machine."
-    pick-menu "Add" "Machine"
+    see "This file makes no machines yet. Its states and ways are made on the drawing."
+    click "New machine"
     see "machine-1: machine"
     see "state start (initial)"
     click "Save"
@@ -232,12 +230,11 @@ machines: does [choose "File" "repair.trb"  choose "Edit" "Machines"]
 [
     ; a button per event; those no way out takes now cannot be used
     machines
-    click "Try"
+    try-machine
     fixed: none
     foreach f try-buttons/pane [if f/text = "fixed" [fixed: f]]
     all [
-        not try-running/hidden
-        try-start/hidden
+        machine-drawing/props/trying
         fixed/disabled
         machine-drawing/props/active = ["s1.2"]
         to logic! find first try-lines "Started in received"
@@ -246,7 +243,7 @@ machines: does [choose "File" "repair.trb"  choose "Edit" "Machines"]
 [
     ; an event moves it: the states it is in are lit, and what happened is told
     machines
-    click "Try"
+    try-machine
     click "start"
     all [
         machine-drawing/props/active = ["s1.3" "s1.4"]
@@ -256,12 +253,12 @@ machines: does [choose "File" "repair.trb"  choose "Edit" "Machines"]
 [
     ; a change to the code stops it
     machines
-    click "Try"
+    try-machine
     click "state received (initial)"
     write-text head replace copy text "state received" "state arrived"
     all [
         none? trying
-        try-running/hidden
+        not machine-drawing/props/trying
         try-panel/hidden
         not machine-props/hidden
         machine-drawing/props/active = []
@@ -272,7 +269,7 @@ machines: does [choose "File" "repair.trb"  choose "Edit" "Machines"]
     ; a timeout at once; the data it changes; shared with no tab while tried
     choose "File" "booking.trb"
     choose "Edit" "Machines"
-    click "Try"
+    try-machine
     see "Time out held"
     click "Time out held"
     all [
@@ -283,7 +280,7 @@ machines: does [choose "File" "repair.trb"  choose "Edit" "Machines"]
 [
     choose "File" "booking.trb"
     choose "Edit" "Machines"
-    click "Try"
+    try-machine
     ; the fields the event carries
     type "Event fields" "amount: 5"
     click "pay"
@@ -298,7 +295,7 @@ machines: does [choose "File" "repair.trb"  choose "Edit" "Machines"]
     choose "File" "booking.trb"
     choose "Edit" "Machines"
     write-text head replace copy text "timeout 0:15" "timeout 0.1"
-    click "Try"
+    try-machine
     wait 0.3
     all [
         none? find try-buttons/pane/1/text "Time out"
@@ -350,7 +347,7 @@ machines: does [choose "File" "repair.trb"  choose "Edit" "Machines"]
     ; a machine that does not start says why
     machines
     write-text head replace copy text "from work to ready on fixed" "from work to raedy on fixed"
-    click "Try"
+    try-machine
     all [
         none? trying
         try-panel/hidden

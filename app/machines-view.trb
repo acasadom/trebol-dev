@@ -147,6 +147,7 @@ graph-data: function ["What the drawing of the k-th machine is given: its nodes 
                     'from rejoin ["s" k "." src]
                     'to collect [foreach t way-targets m w [if t [keep rejoin ["s" k "." t]]]]
                     'label way-label w
+                    'events either w/events [form w/events] [""]
                 ]
             ]
         ]
@@ -158,11 +159,18 @@ graph-data: function ["What the drawing of the k-th machine is given: its nodes 
 draw-machine: function [] [
     if all [trying  text <> try-text] [stop-try "The code changed: try it again."]
     k: either picked [picked/1] [1]
-    machine-drawing/props: make machine-drawing/props [
+    p: make machine-drawing/props [
         graph: either pick ms k [graph-data k] [none]
         selected: either picked [tree-id picked] [none]
         active: try-active
+        editing: edit-next
+        canUndo: can-undo? hist
+        canRedo: can-redo? hist
     ]
+    ; set by path: a trying: in the block would make the word local to this function
+    p/trying: to logic! trying
+    machine-drawing/props: p
+    set 'edit-next none
 ]
 
 ; a drag in the drawing from one state onto another: a new way between them, chosen
@@ -275,7 +283,7 @@ machine-props-code: function [] [
         machine [
             compose/deep [
                 code (rejoin [either m/name [rejoin [m/name ": "]] [""] "machine"])
-                text small muted "Add states to it with Add; ways go from one state to another."
+                text small muted "Drag states onto the drawing from its bar, and from the dots around a state to another to make a way."
                 field "name" "the word it is set to" with [value: (either m/name [form m/name] [""])] on-change [machine-act 'machine-name value]
                 (code-field "data" "its fields and their first values: parts: 0" 'data state-word-value d m 1 'data)
                 button #trash "Delete" danger [machine-act 'delete-machine none]

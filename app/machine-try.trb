@@ -126,8 +126,6 @@ try-active: function [] [
 ]
 
 show-try: function [] [
-    try-start/hidden: to logic! trying
-    try-running/hidden: not trying
     ; while it runs, the properties give their room to it
     try-panel/hidden: not trying
     either trying [machine-props/hidden: nothing-chosen/hidden: true] [fill-mprops]
@@ -156,5 +154,8 @@ show-try: function [] [
     ]
     ; the last few: the drawing keeps the room
     try-history/pane: layout/only collect [foreach l copy/part try-lines 12 [keep compose [text small muted (l)]]]
-    machine-drawing/props: make machine-drawing/props [active: try-active]
+    ; set by path: a trying: in the block would make the word local to this function
+    p: make machine-drawing/props [active: try-active]
+    p/trying: to logic! trying
+    machine-drawing/props: p
 ]
