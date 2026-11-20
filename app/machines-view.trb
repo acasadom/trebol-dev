@@ -127,10 +127,19 @@ machine-node-of: function [id list [block!]] [
 
 graph-data: function ["What the drawing of the k-th machine is given: its nodes and ways, by the structure's ids" k [integer!]] [
     m: pick ms k
+    places: machine-places text machine-key d m
     nodes: collect [
         foreach n m/nodes [
             p: all [n/parent  machine-node m n/parent]
+            ; where it is drawn, from the box it is in, when the file says
+            xy: none
+            if n/id > 1 [
+                path: machine-path m n/id
+                foreach [s spot] places [if path = to block! s [xy: spot]]
+            ]
             keep make map! reduce [
+                'x either xy [xy/x] [none]
+                'y either xy [xy/y] [none]
                 'id rejoin [either n/id = 1 ["m"] ["s"] k "." n/id]
                 'name form n/name
                 'kind form n/kind
@@ -415,6 +424,7 @@ machine-act: function [what [word!] value] [
                     ]
                 ]
             ]
+            if r [r: rename-machine-places r machine-key d m v]
             r
         ]
         delete-machine [
@@ -428,6 +438,7 @@ machine-act: function [what [word!] value] [
                     ]
                 ]
             ]
+            if r [r: rename-machine-places r machine-key d m none]
             set 'picked none
             r
         ]

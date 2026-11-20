@@ -10,6 +10,7 @@ Trebol [
 
 import %model.trb
 import %machines.trb
+import %machine-places.trb
 
 ; As with faces, an edit takes a design and a machine read from it and gives new text, or none when it
 ; cannot be made (a name taken, a way between the states of a parallel state). Comments, spacing and
@@ -153,7 +154,8 @@ rename-state: function [
         if all [w/level = n/parent  w/source = n/name] [append changes value-change d w/block w/from + 1 form new]
         append changes target-changes d m w id new
     ]
-    apply-changes d/text changes
+    path: machine-path m id
+    rename-places apply-changes d/text changes machine-key d m to path! path to path! append copy/part path (length? path) - 1 new
 ]
 
 way-cuts: function ["The cuts that take out of a way what leads to or leaves a state, or the whole way" d [object!] m [object!] w [object!] id [integer!]] [
@@ -193,7 +195,7 @@ delete-state: function [
             value-change d p/block p/initial-at + 1 form select machine-node m first others 'name
         ]
     ]
-    apply-changes d/text changes
+    drop-places apply-changes d/text changes machine-key d m to path! machine-path m id
 ]
 
 set-initial: function [

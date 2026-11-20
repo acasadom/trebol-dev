@@ -20,16 +20,43 @@ pick-state-named: function [k [integer!] name] [
     foreach n select pick ms k 'nodes [if n/name = name [set 'picked reduce [k n/id 'state]]]
 ]
 
-canvas-add: function [detail [block!]] [
+; The drawing sends, with an edit made where the person pointed, where every state of the machine is drawn
+; now, by id: [id x y ...]. They are written first, so that the states it put where there was room stay there;
+; the edit is made on that text, in one change for Undo.
+keep-drawn: function [k [integer!] drawn] [
+    unless all [block? drawn  not empty? drawn  m: pick ms k] [return text]
+    out: copy []
+    foreach [id x y] drawn [
+        p: canvas-place id
+        if all [p  p/1 = k  p/3 = 'state  p/2 > 1  machine-node m p/2  number? x  number? y] [
+            append out reduce [state-key machine-path m p/2  as-pair to integer! round x to integer! round y]
+        ]
+    ]
+    set-machine-places text machine-key d m out
+]
+
+; the path a state named so has, in a state (or the machine, 1)
+path-in: function [m [object!] at [integer!] name [word!]] [
+    append either at = 1 [copy []] [machine-path m at] name
+]
+
+xy-of: function [v] [if all [block? v  2 = length? v  number? v/1  number? v/2] [as-pair to integer! round v/1 to integer! round v/2]]
+
+canvas-add: function ["detail: [kind parent] or [kind parent [x y] drawn], x y from the top-left corner of parent" detail [block!]] [
     kind: to word! first detail
     if kind = 'machine [machine-add 'machine  exit]
-    unless all [p: canvas-place second detail  m: pick ms p/1] [exit]
+    unless all [p: canvas-place second detail  pick ms p/1] [exit]
+    k: p/1
+    t: keep-drawn k pick detail 4
+    d0: design-of t
+    m: pick machines-of d0 k
     at: p/2
     if 'final = select machine-node m at 'kind [at: select machine-node m at 'parent]
     name: fresh-state-name m select [state state final done parallel together] kind
-    unless t: add-state d m at name kind [exit]
+    unless t: add-state d0 m at name kind [exit]
+    if xy: xy-of pick detail 3 [t: put-place t machine-key d0 m path-in m at name xy]
     edit t
-    pick-state-named p/1 name
+    pick-state-named k name
     set 'edit-next tree-id picked
     redraw
 ]
@@ -42,15 +69,21 @@ canvas-connect: function [detail [block!]] [
     ]
 ]
 
-canvas-grow: function [from] [
-    unless all [p: canvas-place from  m: pick ms p/1] [exit]
+canvas-grow: function ["detail: from, or [from [x y] drawn], x y from the top-left corner of the box from is in" detail] [
+    unless block? detail [detail: reduce [detail]]
+    unless all [p: canvas-place first detail  pick ms p/1] [exit]
+    k: p/1
+    t: keep-drawn k pick detail 3
+    d0: design-of t
+    m: pick machines-of d0 k
     name: fresh-state-name m 'state
-    unless t: grow-state d m p/2 name 'go [
+    unless t: grow-state d0 m p/2 name 'go [
         toast "A region of a parallel state has no ways of its own: draw one inside it"
         exit
     ]
+    if xy: xy-of pick detail 2 [t: put-place t machine-key d0 m path-in m select machine-node m p/2 'parent name xy]
     edit t
-    pick-state-named p/1 name
+    pick-state-named k name
     set 'edit-next tree-id picked
     redraw
 ]
@@ -95,14 +128,28 @@ canvas-initial: function [id] [
     redraw
 ]
 
-canvas-move: function [detail [block!]] [
-    unless all [p: canvas-place first detail  m: pick ms p/1  into: canvas-place second detail] [exit]
+canvas-move: function ["detail: [id into] or [id into [x y] drawn], x y from the top-left corner of into" detail [block!]] [
+    unless all [p: canvas-place first detail  pick ms p/1  into: canvas-place second detail] [exit]
+    k: p/1
+    t: keep-drawn k pick detail 4
+    d0: design-of t
+    m: pick machines-of d0 k
     name: select machine-node m p/2 'name
-    unless t: move-state d m p/2 into/2 [
-        toast "It cannot go there"
-        exit
+    unless into/2 = select machine-node m p/2 'parent [
+        unless t: move-state d0 m p/2 into/2 [
+            toast "It cannot go there"
+            exit
+        ]
     ]
+    if xy: xy-of pick detail 3 [t: put-place t machine-key d0 m path-in m into/2 name xy]
     edit t
-    pick-state-named p/1 name
+    pick-state-named k name
     redraw
+]
+
+; a state dragged in its own box, or the whole machine tidied: where every state is drawn now
+canvas-placed: function ["detail: [id x y ...]" drawn [block!]] [
+    unless all [not empty? drawn  p: canvas-place first drawn] [exit]
+    t: keep-drawn p/1 drawn
+    if t <> text [edit t  redraw]
 ]

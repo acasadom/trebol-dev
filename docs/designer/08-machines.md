@@ -88,6 +88,30 @@ repair: machine [
 ]
 ```
 
+## Where states go
+
+The first time a machine is drawn, the designer lays it out by itself. From then on each state stays where you
+put it: drag a state to any spot and let go. Drop it **inside** another state and it goes into that one, which
+grows to hold it; drag it out of its box and it leaves it, its ways going with it. A state with states inside
+takes them along. A new state goes where you drop it from the bar, where you double-click, or where you let go of
+a way dragged to an empty spot. The arrow keys move the chosen state, a little at a time, and more with Shift.
+
+The designer keeps these places in the file, after everything else, in a comment, so the machine never sees
+them:
+
+```
+; layout [
+;     repair [
+;         received 40x30  work 40x120  work/checking 40x40  work/waiting 200x40  ready 400x30
+;     ]
+; ]
+```
+
+Each state is named by its path in the machine, and its place is the top-left corner of its box, counted from
+the box it is in. Rename a state, move it or delete it, and its place follows. A state with no place, as one you
+write yourself in the code, goes to the right of the others. **Tidy**, on the drawing's bar, lays the whole
+machine out again.
+
 ## Trying it
 
 **Try**, over the drawing, makes the machine and starts it, here in the designer. While it runs, the properties

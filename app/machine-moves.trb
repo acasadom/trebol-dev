@@ -6,6 +6,7 @@ Trebol [
 import %model.trb
 import %machines.trb
 import %machine-edits.trb
+import %machine-places.trb
 
 ; Each edit gives the file's new text, or none when it cannot be made, as those of machine-edits.trb do. They
 ; are made in steps, the design read again from the text between them, and give the text at the end: one
@@ -89,7 +90,10 @@ move-state: function [
     if all [empty? q/children  q/kind <> 'parallel] [code: rejoin ["initial " n/name newline code]]
     k2: either empty? q/children [if q/initial-at [q/initial-at + 1]] [select machine-node m2 last q/children 'to]
     t: into-node d2 q k2 code
-    attempt [fix-targets t k]
+    unless t: attempt [fix-targets t k] [return none]
+    ; its places, and those of the states inside it, go where it went
+    new: append either into = 1 [copy []] [machine-path m into] n/name
+    rename-places t machine-key d m to path! machine-path m id to path! new
 ]
 
 grow-state: function [

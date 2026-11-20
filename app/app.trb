@@ -19,6 +19,7 @@ import %move.trb
 import %machines.trb
 import %machine-edits.trb
 import %machine-moves.trb
+import %machine-places.trb
 import %trebol-code.js
 import %machine-graph.js
 
@@ -120,7 +121,8 @@ write-text: function [t [string!]] [
     change-text t
 ]
 
-edit: function [t [string! none!]] [if t [write-text t]]
+; the places of the machines' states stay last in the file, whatever an edit wrote after them
+edit: function [t [string! none!]] [if t [write-text places-last t]]
 
 undo-change: function [] [if all [hist  t: undo-text hist text] [change-text t]]
 redo-change: function [] [if all [hist  t: redo-text hist text] [change-text t]]
@@ -441,7 +443,7 @@ view compose/deep/only [
                 global machine-drawing: widget <tb-machine-graph> fit [graph: none selected: none editing: none trying: false]
                     on-pick [pick-machine event/detail] on-add [canvas-add event/detail] on-connect [canvas-connect event/detail]
                     on-grow [canvas-grow event/detail] on-rename [canvas-rename event/detail] on-remove [canvas-remove event/detail]
-                    on-initial [canvas-initial event/detail] on-move [canvas-move event/detail]
+                    on-initial [canvas-initial event/detail] on-move [canvas-move event/detail] on-place [canvas-placed event/detail]
                     on-undo [undo-change] on-redo [redo-change] on-try [try-machine] on-restart [try-machine] on-stop [stop-try none]
                 global machine-problems: table [at "Where" message "Problem"] hidden
             ]

@@ -1,0 +1,192 @@
+Trebol [
+    title: "Where the designer draws each state of a file's machines, kept in a commented block at the end of the file"
+    exports: [
+        places-of places-last machine-key machine-places set-machine-places rename-places drop-places
+        rename-machine-places put-place state-key
+    ]
+]
+
+import %machines.trb
+
+; The engine never reads it: it is a comment, written last in the file, in Trebol:
+;
+;     ; layout [
+;     ;     order [charging 40x60  paid 260x60  charging/attempt 24x40]
+;     ; ]
+;
+; Each machine is known by the word it is set to (or its place among the file's machines when it has none),
+; each state by its path from the machine. A state's place is its box's top-left corner, from the top-left
+; corner of the box it is in, so a state moved takes the states inside it along. A state with no place is
+; put where there is room; a machine with none is laid out whole.
+
+opening: "; layout ["
+closing: "; ]"
+
+; [start end] of the block in the text: from its first line to the end of its last, or none
+block-at: function [text [string!]] [
+    s: none
+    p: text
+    while [p: find p opening] [
+        if any [head? p  newline = first back p] [s: p]
+        p: next p
+    ]
+    unless s [return none]
+    e: s
+    while [e: find e newline] [
+        e: next e
+        line: copy/part e any [find e newline  tail e]
+        trim/tail line
+        if line = closing [return reduce [index? s  (index? e) + length? closing]]
+        unless #";" = first line [return none]
+    ]
+    none
+]
+
+places-of: function ["The places in a file's text: [key [path pair ...] ...], empty when it has none" text [string!]] [
+    unless span: block-at text [return copy []]
+    code: copy/part at text span/1 span/2 - span/1
+    lines: collect [
+        foreach line split code newline [
+            line: next line                                 ; the ;
+            if #" " = first line [line: next line]
+            keep line
+        ]
+    ]
+    b: attempt [load rejoin collect [foreach l lines [keep l  keep newline]]]
+    unless all [block? b  'layout = first b  block? second b] [return copy []]
+    out: copy []
+    foreach [key places] second b [
+        if all [any [word? key  integer? key]  block? places] [
+            kept: copy []
+            foreach [p xy] places [if all [any [word? p  path? p]  pair? xy] [append kept reduce [state-key p xy]]]
+            append out reduce [key kept]
+        ]
+    ]
+    out
+]
+
+; the text without the block, and the lines around it, ending in one newline (or empty)
+without-block: function [text [string!]] [
+    unless span: block-at text [return copy text]
+    t: copy text
+    remove/part at t span/1 span/2 - span/1
+    trim/tail t
+    unless empty? t [append t newline]
+    t
+]
+
+; one machine's places as lines of the block, short enough to read
+places-lines: function [key places [block!]] [
+    items: collect [foreach [p xy] places [keep rejoin [mold p " " mold xy]]]
+    one: rejoin [";     " mold key " [" combine items "  " "]"]
+    if 100 >= length? one [return reduce [one]]
+    out: reduce [rejoin [";     " mold key " ["]]
+    line: copy ""
+    foreach item items [
+        if all [not empty? line  96 < ((length? line) + 2 + length? item)] [
+            append out rejoin [";         " line]
+            line: copy ""
+        ]
+        unless empty? line [append line "  "]
+        append line item
+    ]
+    unless empty? line [append out rejoin [";         " line]]
+    append out ";     ]"
+    out
+]
+
+combine: function [items [block!] sep [string!]] [
+    out: copy ""
+    foreach i items [unless empty? out [append out sep]  append out i]
+    out
+]
+
+write-places: function ["The text with these places as its block, at its end" text [string!] all-places [block!]] [
+    t: without-block text
+    kept: collect [foreach [key places] all-places [unless empty? places [keep key  keep/only places]]]
+    if empty? kept [return t]
+    unless empty? t [append t newline]
+    append t opening
+    append t newline
+    foreach [key places] kept [foreach l places-lines key places [append t l  append t newline]]
+    append t closing
+    append t newline
+    t
+]
+
+places-last: function ["The text with its block of places at its end, if code was written after it" text [string!]] [
+    unless span: block-at text [return text]
+    rest: copy at text span/2
+    either empty? trim rest [text] [write-places text places-of text]
+]
+
+machine-key: function ["The word a machine is known by in the places, or its place among the file's" d [object!] m [object!]] [
+    if m/name [return m/name]
+    k: 0
+    foreach x machines-of d [k: k + 1  if same? x/block m/block [return k]]
+    none
+]
+
+machine-places: function ["One machine's places: [path pair ...]" text [string!] key] [
+    any [select places-of text key  copy []]
+]
+
+set-machine-places: function ["The text with one machine's places as given" text [string!] key places [block!]] [
+    all-places: places-of text
+    either p: find/skip all-places key 2 [change/only next p places] [append all-places reduce [key places]]
+    write-places text all-places
+]
+
+; a state as the places know it: its name at the top of the machine, its path below
+state-key: function [p [block! path! word!]] [
+    b: to block! p
+    either 1 = length? b [first b] [to path! b]
+]
+
+; a path starts with another: the same state, or one inside it
+under?: function [p [path! word!] top [path! word!]] [
+    a: to block! p
+    b: to block! top
+    all [(length? a) >= length? b  b = copy/part a length? b]
+]
+
+rename-places: function [
+    "The text with a state's places, and those of the states inside it, under a new path"
+    text [string!] key old [path! word!] new [path! word!]
+] [
+    old: to path! to block! old
+    new: to path! to block! new
+    places: machine-places text key
+    if empty? places [return text]
+    out: copy []
+    foreach [p xy] places [
+        if under? p old [p: state-key append to block! new skip to block! p length? to block! old]
+        append out reduce [p xy]
+    ]
+    set-machine-places text key out
+]
+
+drop-places: function ["The text without a state's places, and those of the states inside it" text [string!] key path [path! word!]] [
+    path: to path! to block! path
+    places: machine-places text key
+    if empty? places [return text]
+    out: copy []
+    foreach [p xy] places [unless under? p path [append out reduce [p xy]]]
+    set-machine-places text key out
+]
+
+rename-machine-places: function ["The text with a machine's places under a new key, or without them for none" text [string!] old new] [
+    all-places: places-of text
+    unless p: find/skip all-places old 2 [return text]
+    either new [change p new] [remove/part p 2]
+    write-places text all-places
+]
+
+put-place: function ["The text with one state's place" text [string!] key path [path! word! block!] xy [pair!]] [
+    path: state-key path
+    places: machine-places text key
+    out: copy []
+    foreach [p spot] places [unless (to block! p) = to block! path [append out reduce [p spot]]]
+    append out reduce [path xy]
+    set-machine-places text key out
+]

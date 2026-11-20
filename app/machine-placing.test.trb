@@ -1,0 +1,179 @@
+Trebol [title: "The designer's machine canvas: states put where the person drops them, the places kept in the file"  app: %app.trb]
+
+; The drawing sends, with each edit made where the person pointed, where the new or moved state goes and where
+; every state is drawn now; these tests send the same, as the drawing would.
+
+disk: #(
+    "app.trb" {Trebol [title: "Cog & Chain"]
+
+repair: machine [
+    initial received
+    state received []
+    state work [
+        initial checking
+        state checking []
+        state waiting []
+        from checking to waiting on need-parts
+    ]
+    final ready
+    from received to work on start
+    from work to ready on fixed
+]
+}
+)
+written: none
+
+serve [
+    GET "/api/files" [#(name: "cog-and-chain" files: ["app.trb"])]
+    GET "/api/file" [select disk query/path]
+    PUT "/api/file" [written: body  "Saved."]
+]
+
+open-machines: does [choose "File" "app.trb"  choose "Edit" "Machines"]
+
+sid: function [name] [
+    foreach n select first ms 'nodes [if n/name = to word! name [return rejoin ["s1." n/id]]]
+    none
+]
+
+; where the drawing puts every state now, as it sends it
+drawn: does [reduce [sid "received" 20 30  sid "work" 200 30  sid "checking" 14 34  sid "waiting" 120 34  sid "ready" 420 30]]
+
+; a state's place among a machine's, by its path
+place: function [places [block!] path] [
+    foreach [k v] places [if (to block! k) = to block! path [return v]]
+    none
+]
+
+; a node of the drawing's graph by name
+gnode: function [name] [foreach n machine-drawing/props/graph/nodes [if n/name = name [return n]]  none]
+
+"a file with no places"
+[
+    open-machines
+    all [
+        none? select gnode "received" 'x
+        not find text "; layout ["
+    ]
+]
+
+"a state dragged in its own box"
+[
+    open-machines
+    canvas-placed drawn
+    all [
+        [repair [received 20x30 work 200x30 work/checking 14x34 work/waiting 120x34 ready 420x30]] = places-of text
+        20 = select gnode "received" 'x
+        34 = select gnode "waiting" 'y
+    ]
+]
+[
+    ; the same places again change nothing: nothing to undo
+    open-machines
+    canvas-placed drawn
+    t: text
+    canvas-placed drawn
+    same? t text
+]
+
+"a state dropped from the bar, double clicked or grown where the person points"
+[
+    open-machines
+    canvas-add reduce ["state" sid "work" [60 90] drawn]
+    all [
+        find text "state state []"
+        60x90 = place machine-places text 'repair 'work/state
+        20x30 = place machine-places text 'repair 'received
+    ]
+]
+[
+    open-machines
+    canvas-add reduce ["final" "m1.1" [300 150] drawn]
+    300x150 = place machine-places text 'repair 'done
+]
+[
+    ; from the bar's click: no place, and none written for a machine with none
+    open-machines
+    canvas-add reduce ["state" "m1.1" none none]
+    not find text "; layout ["
+]
+[
+    open-machines
+    canvas-grow reduce [sid "received" [20 120] drawn]
+    all [
+        find text "from received to state on go"
+        20x120 = place machine-places text 'repair 'state
+    ]
+]
+
+"a state dropped into another, or out of it"
+[
+    open-machines
+    canvas-move reduce [sid "ready" sid "work" [30 100] drawn]
+    p: machine-places text 'repair
+    all [
+        none? place p 'ready
+        30x100 = place p 'work/ready
+        14x34 = place p 'work/checking
+    ]
+]
+[
+    ; a state with states inside takes their places along
+    open-machines
+    canvas-add reduce ["state" "m1.1" [600 30] drawn]
+    canvas-move reduce [sid "work" sid "state" [10 40] none]
+    p: machine-places text 'repair
+    all [
+        10x40 = place p 'state/work
+        120x34 = place p 'state/work/waiting
+        none? place p 'work/waiting
+    ]
+]
+[
+    open-machines
+    canvas-move reduce [sid "waiting" "m1.1" [500 200] drawn]
+    p: machine-places text 'repair
+    all [500x200 = place p 'waiting  none? place p 'work/waiting]
+]
+
+"renamed and deleted states, renamed machines"
+[
+    open-machines
+    canvas-placed drawn
+    canvas-rename reduce [sid "work" "repairing"]
+    p: machine-places text 'repair
+    all [200x30 = place p 'repairing  14x34 = place p 'repairing/checking  none? place p 'work]
+]
+[
+    open-machines
+    canvas-placed drawn
+    canvas-remove sid "work"
+    [received 20x30 ready 420x30] = machine-places text 'repair
+]
+[
+    open-machines
+    canvas-placed drawn
+    set 'picked [1 1 machine]
+    machine-act 'machine-name "fixing"
+    all [find text "fixing: machine"  [fixing] = collect [foreach [k p] places-of text [keep k]]]
+]
+
+"the places stay last"
+[
+    ; a machine added goes before them
+    open-machines
+    canvas-placed drawn
+    canvas-add ["machine" none]
+    all [
+        2 = length? ms
+        (index? find text "machine-1: machine") < index? find text "; layout ["
+        [repair] = collect [foreach [k p] places-of text [keep k]]
+    ]
+]
+[
+    ; undone, the places go too
+    open-machines
+    canvas-placed drawn
+    undo-change
+    not find text "; layout ["
+]

@@ -1,5 +1,6 @@
-// The drawing of <tb-machine-graph> (machine-graph.js): its styles, the graph ELK lays out, and the SVG made from
-// ELK's layout. ELK runs in a worker, app/elk-worker.js, started the first time a drawing is made.
+// The drawing of <tb-machine-graph> (machine-graph.js): its styles, the graph ELK lays out (for a machine with no
+// places, and Tidy), and the SVG made from the boxes graph-place.js places. ELK runs in a worker,
+// app/elk-worker.js, started the first time it is needed.
 // A state is a rounded box; a state with states inside is a box around them, its name on top; a parallel state's
 // box is dashed, each region a box inside it; a final state has a double border. A black dot points at the
 // initial state of each level. Ways are arrows, labelled with their events.
@@ -8,7 +9,7 @@ import ELK from 'elkjs/lib/elk-api.js';
 export const NS = 'http://www.w3.org/2000/svg';
 export const HEAD = 26;          // the room on top of a box for its name
 export const FONT = '13px Inter, system-ui, sans-serif';
-const LABEL_FONT = '12px Inter, system-ui, sans-serif';
+export const LABEL_FONT = '12px Inter, system-ui, sans-serif';
 
 let elk = null;
 export function layouter() {
@@ -46,7 +47,9 @@ export const css = `
 .bar .sep { width: 1px; height: 20px; background: var(--tb-border, #e7e5e4); margin: 0 4px; }
 .bar svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 .stage { position: relative; flex: 1; overflow: auto; min-height: 160px; outline: none; }
-.stage > svg { display: block; margin: auto; user-select: none; touch-action: none; }
+.stage > svg { display: block; user-select: none; touch-action: none; overflow: visible; }
+.node.lifted { opacity: .85; }
+.node.lifted > .box { stroke-dasharray: 4 3; }
 .hint { margin: 12px auto 4px; max-width: 420px; text-align: center; color: var(--tb-muted, #6b7280); font-size: 13px; pointer-events: none; }
 .empty { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 40px 16px; color: var(--tb-muted, #6b7280); text-align: center; }
 .empty button { height: 34px; padding: 0 14px; border: 1px solid var(--tb-border-strong, #a8a29e); border-radius: var(--tb-radius, 8px);
@@ -67,7 +70,6 @@ export const css = `
 .node.target > .box { stroke: var(--tb-primary, #2563eb); stroke-width: 2.5; stroke-dasharray: none;
   fill: color-mix(in oklch, var(--tb-primary, #2563eb) 10%, var(--tb-surface, #fff)); }
 .machine.target > .box { stroke: var(--tb-primary, #2563eb); stroke-dasharray: 6 4; }
-.node.lifted { opacity: .35; }
 .dot { fill: var(--tb-text, #1c1c1c); }
 .way { cursor: pointer; }
 .way path.line { fill: none; stroke: var(--tb-muted, #78716c); stroke-width: 1.5; }
@@ -162,17 +164,6 @@ export function elkGraph(g, direction = 'RIGHT') {
   };
 }
 
-/** The SVG path of an ELK edge section, curved where ELK routed it as splines. */
-function pathOf(sec) {
-  const pts = [sec.startPoint, ...(sec.bendPoints ?? []), sec.endPoint];
-  if (pts.length > 2 && (pts.length - 1) % 3 === 0) {
-    let d = `M${pts[0].x},${pts[0].y}`;
-    for (let i = 1; i < pts.length; i += 3) d += ` C${pts[i].x},${pts[i].y} ${pts[i + 1].x},${pts[i + 1].y} ${pts[i + 2].x},${pts[i + 2].y}`;
-    return d;
-  }
-  return pts.map((p, i) => `${i ? 'L' : 'M'}${p.x},${p.y}`).join(' ');
-}
-
 function arrowHead(parent, from, to) {
   const a = Math.atan2(to.y - from.y, to.x - from.x);
   const l = 9, w = 4.5;
@@ -182,68 +173,58 @@ function arrowHead(parent, from, to) {
 }
 
 /**
- * The SVG of a layout, at a scale. Gives the svg and every box drawn, the innermost first:
- * [{id, kind, x, y, width, height, depth}] (kind machine, state, group, parallel or final).
+ * The SVG of the boxes and ways placed by graph-place.js, at a scale, showing the frame given
+ * ({x, y, w, h}, the machine's box unless a drag keeps an older one). Gives the svg and every box drawn,
+ * the innermost first: [{id, kind, x, y, width, height, depth}].
  */
-export function drawGraph(graph, laid, scale) {
+export function drawGraph(graph, arranged, ways, scale, frame = arranged.frame) {
   const byId = new Map(graph.nodes.map(n => [n.id, n]));
-  const kidsOf = new Set(graph.nodes.map(n => n.parent).filter(Boolean));
-  const w = Math.ceil(laid.width), h = Math.ceil(laid.height);
-  const s = svg('svg', { viewBox: `0 0 ${w} ${h}`, width: Math.ceil(w * scale), height: Math.ceil(h * scale), role: 'group',
-    'aria-label': `Machine ${graph.name ?? ''}`.trim() });
-  const rects = [];
+  const w = Math.ceil(frame.w), h = Math.ceil(frame.h);
+  const s = svg('svg', { viewBox: `${frame.x} ${frame.y} ${w} ${h}`, width: Math.ceil(w * scale), height: Math.ceil(h * scale),
+    role: 'group', 'aria-label': `Machine ${graph.name ?? ''}`.trim() });
   const nodes = svg('g', {}, s);
-  const walk = (e, depth) => {
-    if (e.id.startsWith('start:')) {
-      svg('circle', { class: 'dot', cx: e.x + 6, cy: e.y + 6, r: 6 }, nodes);
-      return;
+  // outer boxes first, so the states inside them are drawn over them
+  const order = [...arranged.boxes].sort((a, b) => a.depth - b.depth);
+  for (const b of order) {
+    const n = byId.get(b.id);
+    if (!n) continue;
+    const kind = b.kind;
+    const g = svg('g', { class: `node ${kind}`, 'data-id': n.id }, nodes);
+    if (n.kind !== 'machine') {
+      g.setAttribute('tabindex', '0');
+      g.setAttribute('role', 'button');
+      g.setAttribute('aria-label', `${n.kind} ${n.name}`);
     }
-    const n = byId.get(e.id);
-    if (n) {
-      const kind = n.kind === 'machine' ? 'machine' : n.kind === 'parallel' ? 'parallel' : kidsOf.has(n.id) ? 'group' : n.kind;
-      const g = svg('g', { class: `node ${kind}`, 'data-id': n.id }, nodes);
-      if (n.kind !== 'machine') {
-        g.setAttribute('tabindex', '0');
-        g.setAttribute('role', 'button');
-        g.setAttribute('aria-label', `${n.kind} ${n.name}`);
+    const r = kind === 'group' || kind === 'parallel' ? 10 : 9;
+    svg('rect', { class: 'box', x: b.x, y: b.y, width: b.w, height: b.h, rx: r }, g);
+    if (n.kind === 'final') svg('rect', { class: 'inner', x: b.x + 3.5, y: b.y + 3.5, width: b.w - 7, height: b.h - 7, rx: r - 3 }, g);
+    if (n.kind !== 'machine') {
+      const t = svg('text', { class: 'name' }, g);
+      if (kind === 'group' || kind === 'parallel') {
+        t.setAttribute('x', b.x + 12);
+        t.setAttribute('y', b.y + HEAD / 2 + 2);
+      } else {
+        t.setAttribute('x', b.x + b.w / 2);
+        t.setAttribute('y', b.y + b.h / 2);
+        t.setAttribute('text-anchor', 'middle');
       }
-      const r = kind === 'group' || kind === 'parallel' ? 10 : 9;
-      svg('rect', { class: 'box', x: e.x, y: e.y, width: e.width, height: e.height, rx: r }, g);
-      if (n.kind === 'final') svg('rect', { class: 'inner', x: e.x + 3.5, y: e.y + 3.5, width: e.width - 7, height: e.height - 7, rx: r - 3 }, g);
-      if (n.kind !== 'machine') {
-        const t = svg('text', { class: 'name' }, g);
-        if (kind === 'group' || kind === 'parallel') {
-          t.setAttribute('x', e.x + 12);
-          t.setAttribute('y', e.y + HEAD / 2 + 2);
-        } else {
-          t.setAttribute('x', e.x + e.width / 2);
-          t.setAttribute('y', e.y + e.height / 2);
-          t.setAttribute('text-anchor', 'middle');
-        }
-        t.textContent = n.name;
-      }
-      rects.push({ id: n.id, kind, x: e.x, y: e.y, width: e.width, height: e.height, depth });
+      t.textContent = n.name;
     }
-    for (const c of e.children ?? []) walk(c, depth + 1);
-  };
-  for (const c of laid.children ?? []) walk(c, 0);
-  const ways = svg('g', {}, s);
-  for (const e of laid.edges ?? []) {
-    const start = e.id.startsWith('start:');
-    const g = svg('g', { class: start ? 'start' : 'way', 'data-id': start ? '' : e.id.split('#')[0] }, ways);
-    for (const sec of e.sections ?? []) {
-      const d = pathOf(sec);
-      if (!start) svg('path', { class: 'hit', d }, g);
-      svg('path', { class: 'line', d }, g);
-      const pts = [sec.startPoint, ...(sec.bendPoints ?? []), sec.endPoint];
-      arrowHead(g, pts[pts.length - 2], pts[pts.length - 1]);
-    }
-    for (const l of e.labels ?? []) {
-      svg('rect', { class: 'label-bg', x: l.x, y: l.y, width: l.width, height: l.height, rx: 4 }, g);
-      svg('text', { class: 'label', x: l.x + l.width / 2, y: l.y + l.height / 2, 'text-anchor': 'middle' }, g).textContent = l.text;
+  }
+  for (const d of arranged.dots) svg('circle', { class: 'dot', cx: d.x, cy: d.y, r: 6 }, nodes);
+  const lines = svg('g', {}, s);
+  for (const way of ways) {
+    const g = svg('g', { class: way.start ? 'start' : 'way', 'data-id': way.id }, lines);
+    if (!way.start) svg('path', { class: 'hit', d: way.d }, g);
+    svg('path', { class: 'line', d: way.d }, g);
+    arrowHead(g, way.tip[0], way.tip[1]);
+    if (way.label) {
+      const lw = way.label.w;
+      svg('rect', { class: 'label-bg', x: way.label.x - lw / 2, y: way.label.y - 9, width: lw, height: 18, rx: 4 }, g);
+      svg('text', { class: 'label', x: way.label.x, y: way.label.y, 'text-anchor': 'middle' }, g).textContent = way.label.text;
     }
   }
   svg('g', { class: 'overlay' }, s);
-  rects.sort((a, b) => b.depth - a.depth);
+  const rects = arranged.boxes.map(b => ({ id: b.id, kind: b.kind, x: b.x, y: b.y, width: b.w, height: b.h, depth: b.depth }));
   return { svg: s, rects };
 }

@@ -1,29 +1,37 @@
 // <tb-machine-graph>: the designer's canvas for a machine. The machine is made here with the mouse, and the
-// designer writes it as Trebol; the drawing is laid out by ELK every time (graph-draw.js), so nothing is placed
-// by hand: dragging a state only puts it inside another state, or out of it.
+// designer writes it as Trebol. Each state is drawn where the person put it (graph-place.js): dragged anywhere,
+// dropped inside another state it goes into it, and that one grows to hold it; dragged out, it comes out. The
+// places are kept in the file; a machine with none is laid out by ELK (graph-draw.js), and so is one tidied.
 //   - The bar: State, Final and Parallel are dragged onto the drawing (into a box: inside that state), or
-//     clicked to add one to the machine; Undo and Redo; Try, or Restart and Stop while the machine runs.
+//     clicked to add one to the machine; Undo and Redo; Tidy; Try, or Restart and Stop while the machine runs.
 //   - A double click on an empty spot adds a state there (inside the box it is in); on a name or a way's label
 //     it renames it in place; Enter keeps it, Escape leaves it.
 //   - Around the state under the pointer, four dots: dragged onto a state they make a way to it, onto an empty
 //     spot a new state and a way to it.
 //   - A right click gives what can be done to a state or a way; Delete deletes what is chosen.
-// It is laid out both left to right and top to bottom, and drawn the way that fits its place better, made
-// smaller to fit down to 80%; a bigger one scrolls.
+//   - The arrow keys move the chosen state, Shift for bigger steps.
+// It is made smaller to fit its place, down to 80%; a bigger one scrolls. ELK lays it out both left to right
+// and top to bottom, and the one that fits better is used.
 // Properties:
-//   graph     {name, nodes: [{id, name, kind, parent, initial}], ways: [{id, from, to: [id...], label, events}]}
-//             kind is machine, state, final or parallel; parent is the id of the node it is in (none for the machine)
+//   graph     {name, nodes: [{id, name, kind, parent, initial, x, y}], ways: [{id, from, to: [id...], label, events}]}
+//             kind is machine, state, final or parallel; parent is the id of the node it is in (none for the
+//             machine); x, y its place from the top-left corner of the box it is in, or none
 //   selected  the id of what is chosen, or none       active   ids of the states the machine is in (Try)
 //   editing   the id of a state or way whose name is to be typed now, as it is made, or none
 //   trying    whether the machine runs (Try)          canUndo, canRedo   whether Undo and Redo can be used
-// Events, their detail: pick id · add [kind parent] (kind state, final, parallel or machine) · connect [from to] ·
-// grow from (a new state and a way to it) · rename [id text] · remove id · initial id · move [id parent] ·
-// undo · redo · try · restart · stop.
+// Events, their detail: pick id · add [kind parent at drawn] (kind state, final, parallel or machine) ·
+// connect [from to] · grow [from at drawn] (a new state beside it, and a way to it) · rename [id text] ·
+// remove id · initial id · move [id parent at drawn] · place drawn · undo · redo · try · restart · stop.
+// at is [x y], where the new or moved state goes from the top-left corner of the box it goes in, or none;
+// drawn is where every state is drawn now, [id x y ...], each from the box it is in, or none when the machine
+// has no places and nothing is put anywhere.
 // Built into app/machine-graph.js by `npm run build:graph`, with ELK's worker copied to app/elk-worker.js.
 import { css, drawGraph, elkGraph, layouter, svg, HEAD } from './graph-draw.js';
+import { arrange, cornerOf, elkPlaces, leafSize, placesOf, route } from './graph-place.js';
 
 const SMALLEST = 0.8;     // how much a drawing may shrink to fit its place
 const NEAR = 14;          // how far from a state its dots stay shown
+const STEP = 8;           // what an arrow key moves a state by, and Shift with it
 
 const ICONS = {
   state: '<rect x="3" y="6" width="18" height="12" rx="4"/>',
@@ -34,6 +42,7 @@ const ICONS = {
   try: '<path d="M7 4v16l13-8z"/>',
   restart: '<path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/>',
   stop: '<path d="M6 6l12 12M18 6 6 18"/>',
+  tidy: '<rect x="3" y="4" width="7" height="6" rx="1.5"/><rect x="14" y="4" width="7" height="6" rx="1.5"/><rect x="8.5" y="14" width="7" height="6" rx="1.5"/><path d="M6.5 10v2h11v-2M12 12v2"/>',
 };
 
 function button(cls, icon, text, title) {
@@ -62,8 +71,13 @@ class MachineGraph extends HTMLElement {
   #svg = null;
   #rects = [];        // the boxes drawn, innermost first
   #turn = 0;          // the layout asked last: an older one that ends later is dropped
-  #laid = null;       // {RIGHT, DOWN}: ELK's layouts of the graph
-  #shown = '';        // which of them is drawn, and how big
+  #rel = null;        // Map id -> {x, y}: where each state is drawn (the file's places, or ELK's)
+  #placed = false;    // whether the file has places for the machine
+  #arr = null;        // the boxes as drawn now (graph-place.js arrange)
+  #scale = 1;
+  #frame = null;      // the part of the drawing shown: the machine's box, or the whole place when that is bigger
+  #frameFor = null;   // the machine it was for
+  #shown = '';        // the scale drawn at: drawn again only when it changes
   #press = null;      // what the pointer is doing on the drawing: {mode: press | move | link, ...}
   #handled = false;   // the click that ends a press did its work on pointerup
   #hover = null;      // the state whose dots are shown
@@ -152,7 +166,7 @@ class MachineGraph extends HTMLElement {
       b.addEventListener('pointerdown', ev => this.#toolDown(ev, kind, text));
       b.addEventListener('click', () => {
         if (this.#handled) { this.#handled = false; return; }
-        this.#tell('add', [kind, this.#rootId()]);
+        this.#tell('add', [kind, this.#rootId(), null, this.#drawn()]);
       });
       bar.append(b);
     }
@@ -163,7 +177,10 @@ class MachineGraph extends HTMLElement {
     const redo = button('', 'redo', 'Redo');
     redo.disabled = !this.#canRedo;
     redo.addEventListener('click', () => this.#tell('redo'));
-    bar.append(undo, redo);
+    const tidy = button('', 'tidy', 'Tidy', 'Lay the machine out again');
+    tidy.disabled = !this.#graph || this.#graph.nodes.length < 2;
+    tidy.addEventListener('click', () => this.#tidy());
+    bar.append(undo, redo, tidy);
     if (!this.#graph) return;
     if (this.#trying) {
       const restart = button('go', 'restart', 'Restart');
@@ -184,7 +201,7 @@ class MachineGraph extends HTMLElement {
     const b = ev.currentTarget;
     b.setPointerCapture(ev.pointerId);
     const ghost = Object.assign(document.createElement('div'), { className: 'ghost', textContent: text });
-    let moved = false, into = null;
+    let moved = false, into = null, spot = null;
     const start = [ev.clientX, ev.clientY];
     const move = e => {
       if (!moved && Math.hypot(e.clientX - start[0], e.clientY - start[1]) < 5) return;
@@ -192,6 +209,7 @@ class MachineGraph extends HTMLElement {
       ghost.style.left = `${e.clientX + 10}px`;
       ghost.style.top = `${e.clientY + 6}px`;
       into = this.#svg && this.#overStage(e) ? this.#containerAt(this.#at(e), null) : null;
+      spot = into ? this.#spotIn(this.#at(e), into, kind) : null;
       this.#target(into);
     };
     const up = e => {
@@ -202,7 +220,7 @@ class MachineGraph extends HTMLElement {
       this.#target(null);
       if (!moved) return;
       this.#handled = true;
-      if (e.type === 'pointerup' && into) this.#tell('add', [kind, into]);
+      if (e.type === 'pointerup' && into) this.#tell('add', [kind, into, spot, this.#drawn(true)]);
     };
     b.addEventListener('pointermove', move);
     b.addEventListener('pointerup', up);
@@ -220,7 +238,8 @@ class MachineGraph extends HTMLElement {
     const turn = ++this.#turn;
     const g = this.#graph;
     if (!g || !g.nodes.length) {
-      this.#laid = null;
+      this.#rel = null;
+      this.#arr = null;
       this.#svg = null;
       const empty = Object.assign(document.createElement('div'), { className: 'empty' });
       empty.append('This file makes no machines yet.');
@@ -230,43 +249,91 @@ class MachineGraph extends HTMLElement {
       this.#stage.replaceChildren(empty);
       return;
     }
-    let laid;
-    try {
-      const [right, down] = await Promise.all(['RIGHT', 'DOWN'].map(d => layouter().layout(elkGraph(g, d))));
-      laid = { RIGHT: right, DOWN: down };
-    } catch (e) {
-      if (turn !== this.#turn) return;
-      this.#stage.replaceChildren(Object.assign(document.createElement('div'), { className: 'empty', textContent: `The drawing failed: ${e?.message ?? e}` }));
-      return;
+    let rel = new Map(g.nodes.filter(n => n.parent != null && typeof n.x === 'number' && typeof n.y === 'number')
+      .map(n => [n.id, { x: n.x, y: n.y }]));
+    this.#placed = rel.size > 0;
+    if (!rel.size && g.nodes.length > 1) {
+      try {
+        rel = await this.#elk(g);
+      } catch (e) {
+        if (turn !== this.#turn) return;
+        this.#stage.replaceChildren(Object.assign(document.createElement('div'), { className: 'empty', textContent: `The drawing failed: ${e?.message ?? e}` }));
+        return;
+      }
     }
     if (turn !== this.#turn) return;
-    this.#laid = laid;
+    this.#rel = rel;
     this.#shown = '';
     this.#show();
     this.dispatchEvent(new Event('drawn'));
   }
 
-  /** The layout that fits the place better, at the size that fits it, unless it is drawn already. */
-  #show() {
-    if (!this.#laid || !this.#graph) return;
+  /** ELK's places for a graph, laid out the way that fits the place better. */
+  async #elk(g) {
+    const [right, down] = await Promise.all(['RIGHT', 'DOWN'].map(d => layouter().layout(elkGraph(g, d))));
     const W = Math.max(1, this.#stage.clientWidth - 8), H = Math.max(1, this.#stage.clientHeight - 8);
     const fit = l => Math.min(W / l.width, H / l.height);
-    const way = fit(this.#laid.DOWN) > fit(this.#laid.RIGHT) * 1.05 ? 'DOWN' : 'RIGHT';
-    const scale = Math.round(Math.min(1, Math.max(SMALLEST, fit(this.#laid[way]))) * 20) / 20;
-    const shown = `${way} ${scale}`;
+    return elkPlaces(fit(down) > fit(right) * 1.05 ? down : right);
+  }
+
+  /** Tidy: ELK lays the machine out again, and the places it gives are kept. */
+  async #tidy() {
+    const g = this.#graph;
+    if (!g || g.nodes.length < 2) return;
+    const rel = await this.#elk(g);
+    if (g !== this.#graph) return;
+    this.#frame = null;
+    this.#tell('place', placesOf(g, arrange(g, rel)));
+  }
+
+  /** Where every state is drawn now, to send with an edit; none when the file has no places and none is put. */
+  #drawn(always = false) {
+    return (always || this.#placed) && this.#arr ? placesOf(this.#graph, this.#arr) : null;
+  }
+
+  /** The drawing at the size that fits the place, unless it is drawn so already. */
+  #show() {
+    if (!this.#rel || !this.#graph) return;
+    const arr = arrange(this.#graph, this.#rel);
+    const W = Math.max(1, this.#stage.clientWidth - 8), H = Math.max(1, this.#stage.clientHeight - 8);
+    // the whole place is the drawing's, from the machine's corner: a state can be put anywhere in it, and
+    // nothing moves when the machine grows or shrinks. Its size and its corner stay as they were for the same
+    // machine, unless a state was put past the corner; tidied, it is made to fit again.
+    const same = this.#frame && this.#frameFor === this.#graph.name;
+    const fit = Math.min(W / arr.frame.w, H / arr.frame.h);
+    const scale = same ? this.#scale : Math.round(Math.min(1, Math.max(SMALLEST, fit)) * 20) / 20;
+    const x = same ? Math.min(this.#frame.x, arr.frame.x) : arr.frame.x, y = same ? Math.min(this.#frame.y, arr.frame.y) : arr.frame.y;
+    const frame = { x, y, w: Math.max(arr.frame.x + arr.frame.w - x, W / scale), h: Math.max(arr.frame.y + arr.frame.h - y, H / scale) };
+    const shown = `${scale} ${frame.x} ${frame.y} ${Math.round(frame.w)} ${Math.round(frame.h)}`;
     if (shown === this.#shown) return;
     this.#shown = shown;
-    const { svg: s, rects } = drawGraph(this.#graph, this.#laid[way], scale);
+    this.#scale = scale;
+    this.#arr = arr;
+    this.#frame = frame;
+    this.#frameFor = this.#graph.name;
+    this.#render(arr, frame);
+    this.#openEditing();
+    // one asked for what this drawing does not have (taken back with Undo) is dropped
+    if (this.#pending && !this.#el(this.#pending)) this.#pending = null;
+  }
+
+  /** Draws boxes placed by arrange; a drag keeps the frame it started with, so nothing under it shifts. */
+  #render(arr, frame, lifted = null) {
+    // the state that has the keyboard keeps it, drawn anew
+    const focused = this.#root.activeElement?.closest?.('.node')?.getAttribute('data-id');
+    const { svg: s, rects } = drawGraph(this.#graph, arr, route(this.#graph, arr), this.#scale, frame);
     this.#svg = s;
     this.#rects = rects;
     this.#hover = null;
     const parts = [s];
     const states = this.#graph.nodes.length - 1;
-    if (states < 3 || this.#graph.ways.length === 0) {
+    if (!lifted && (states < 3 || this.#graph.ways.length === 0)) {
       parts.push(Object.assign(document.createElement('div'), { className: 'hint',
-        textContent: 'Drag a state from the bar, or double-click an empty spot. Drag from the dots around a state to join it to another.' }));
+        textContent: 'Drag a state from the bar, or double-click an empty spot. Drag a state to place it, into another to put it inside. Drag from the dots around a state to join it to another.' }));
     }
     this.#stage.replaceChildren(...parts);
+    if (lifted) this.#el(lifted)?.classList.add('lifted');
+    if (focused) this.#el(focused)?.focus({ preventScroll: true });
     // a name being typed stays, over its state as now drawn
     if (this.#inline) {
       this.#stage.append(this.#inline.input);
@@ -274,9 +341,22 @@ class MachineGraph extends HTMLElement {
       else this.#inline.input.focus();
     }
     this.#paint();
-    this.#openEditing();
-    // one asked for what this drawing does not have (taken back with Undo) is dropped
-    if (this.#pending && !this.#el(this.#pending)) this.#pending = null;
+  }
+
+  /** Draws the drawing as it is again, after a drag the designer may not take. */
+  #redrawNow() {
+    this.#shown = '';
+    this.#show();
+  }
+
+  /** A box of the drawing as it is now, by id. */
+  #box(id) { return this.#arr?.boxes.find(b => b.id === id) ?? null; }
+
+  /** [x y] of a new state's corner centred on a point, from the top-left corner of a box. */
+  #spotIn(p, into, kind = 'state') {
+    const b = this.#arr && cornerOf(this.#graph, this.#arr, into);
+    const { w, h } = leafSize(kind === 'final' ? 'done' : kind === 'parallel' ? 'together' : 'state');
+    return b ? [Math.round(p.x - b.x - w / 2), Math.round(p.y - b.y - h / 2)] : null;
   }
 
   #paint() {
@@ -360,13 +440,29 @@ class MachineGraph extends HTMLElement {
         return;
       }
       if (press.mode === 'press' && Math.hypot(ev.clientX - press.client[0], ev.clientY - press.client[1]) > 5) {
+        const b = this.#box(press.id);
+        if (!b) return;
         press.mode = 'move';
-        this.#el(press.id)?.classList.add('lifted');
+        press.grab = { x: press.at.x - b.x, y: press.at.y - b.y };
+        press.frame = this.#frame;
         this.#showDots(null);
       }
       if (press.mode === 'move') {
-        press.into = this.#containerAt(p, press.id);
-        this.#target(press.into);
+        press.x = p.x - press.grab.x;
+        press.y = p.y - press.grab.y;
+        press.point = p;
+        // drawn once a frame: the state where the pointer takes it, the boxes around it as they are without it
+        if (!press.frame_asked) {
+          press.frame_asked = true;
+          requestAnimationFrame(() => {
+            press.frame_asked = false;
+            if (this.#press !== press) return;
+            press.arr = arrange(this.#graph, this.#rel, { id: press.id, x: press.x, y: press.y });
+            this.#render(press.arr, press.frame, press.id);
+            press.into = this.#containerAt(press.point, press.id);
+            this.#target(press.into);
+          });
+        }
       }
     });
     st.addEventListener('pointerdown', ev => {
@@ -389,7 +485,7 @@ class MachineGraph extends HTMLElement {
       const r = this.#stateAt(p);
       if (r) {
         st.setPointerCapture(ev.pointerId);
-        this.#press = { mode: 'press', id: r.id, client: [ev.clientX, ev.clientY] };
+        this.#press = { mode: 'press', id: r.id, client: [ev.clientX, ev.clientY], at: p };
       }
     });
     const end = ev => {
@@ -398,16 +494,25 @@ class MachineGraph extends HTMLElement {
       this.#press = null;
       this.#target(null);
       press.line?.remove();
-      this.#el(press.id)?.classList.remove('lifted');
+      if (press.mode === 'move') this.#redrawNow();
       if (ev.type !== 'pointerup') return;
       this.#handled = true;
       if (press.mode === 'press') { if (press.id !== this.#selected) this.#tell('pick', press.id); }
       else if (press.mode === 'link') {
         if (press.over) this.#tell('connect', [press.from, press.over]);
-        else this.#tell('grow', press.from);
-      } else if (press.mode === 'move') {
+        else {
+          const parent = this.#node(press.from)?.parent;
+          this.#tell('grow', [press.from, this.#spotIn(this.#at(ev), parent), this.#drawn(true)]);
+        }
+      } else if (press.mode === 'move' && press.arr) {
         const n = this.#node(press.id);
-        if (press.into && n && press.into !== n.parent) this.#tell('move', [press.id, press.into]);
+        const into = press.into ?? n?.parent;
+        const b = cornerOf(this.#graph, press.arr, into);
+        if (!n || !b) return;
+        const at = [Math.round(press.x - b.x), Math.round(press.y - b.y)];
+        const drawn = placesOf(this.#graph, press.arr, press.id, into);
+        if (into === n.parent) this.#tell('place', drawn);
+        else this.#tell('move', [press.id, into, at, drawn]);
       }
     };
     st.addEventListener('pointerup', end);
@@ -427,9 +532,10 @@ class MachineGraph extends HTMLElement {
       if (way) return this.#rename(way.getAttribute('data-id'));
       const p = this.#at(ev);
       const r = this.#stateAt(p);
-      if (!r) return this.#tell('add', ['state', this.#rootId()]);
+      const add = into => this.#tell('add', ['state', into, this.#spotIn(p, into), this.#drawn(true)]);
+      if (!r) return add(this.#rootId());
       // a box with states inside: its name renames it, its room takes a new state
-      if ((r.kind === 'group' || r.kind === 'parallel') && p.y > r.y + HEAD) return this.#tell('add', ['state', r.id]);
+      if ((r.kind === 'group' || r.kind === 'parallel') && p.y > r.y + HEAD) return add(r.id);
       this.#rename(r.id);
     });
     st.addEventListener('contextmenu', ev => {
@@ -445,12 +551,25 @@ class MachineGraph extends HTMLElement {
       if (ev.key === 'Enter' && node) { ev.preventDefault(); this.#tell('pick', id); }
       else if ((ev.key === 'Delete' || ev.key === 'Backspace') && id && id !== this.#rootId()) { ev.preventDefault(); this.#tell('remove', id); }
       else if (ev.key === 'F2' && id && id !== this.#rootId()) { ev.preventDefault(); this.#rename(id); }
+      else if (ev.key.startsWith('Arrow') && id && this.#node(id) && id !== this.#rootId()) {
+        ev.preventDefault();
+        this.#nudge(id, ev.key, ev.shiftKey ? STEP * 4 : STEP);
+      }
       else if (ev.key === 'ContextMenu' && node) {
         ev.preventDefault();
         const b = node.getBoundingClientRect();
         this.#openMenu({ clientX: b.left + 8, clientY: b.bottom }, id);
       }
     });
+  }
+
+  /** A state moved by an arrow key: it stays in the box it is in. */
+  #nudge(id, key, by) {
+    const b = this.#box(id);
+    if (!b) return;
+    const [dx, dy] = { ArrowLeft: [-by, 0], ArrowRight: [by, 0], ArrowUp: [0, -by], ArrowDown: [0, by] }[key] ?? [0, 0];
+    const arr = arrange(this.#graph, this.#rel, { id, x: b.x + dx, y: b.y + dy });
+    this.#tell('place', placesOf(this.#graph, arr, id, this.#node(id).parent));
   }
 
   // --- naming in place --------------------------------------------------------------------------------
@@ -553,13 +672,21 @@ class MachineGraph extends HTMLElement {
     if (way) {
       items.push(['Rename its events', () => this.#rename(id)], ['Delete the way', () => this.#tell('remove', id), 'danger']);
     } else if (node?.kind === 'machine') {
-      items.push(['Add a state', () => this.#tell('add', ['state', id])], ['Add a final state', () => this.#tell('add', ['final', id])]);
+      items.push(['Add a state', () => this.#tell('add', ['state', id, null, this.#drawn()])],
+        ['Add a final state', () => this.#tell('add', ['final', id, null, this.#drawn()])]);
     } else if (node) {
       const parent = this.#node(node.parent);
       if (!node.initial && parent?.kind !== 'parallel') items.push(['Make it the initial state', () => this.#tell('initial', id)]);
-      if (node.kind !== 'final') items.push(['Add a state inside', () => this.#tell('add', ['state', id])]);
+      if (node.kind !== 'final') items.push(['Add a state inside', () => this.#tell('add', ['state', id, null, this.#drawn()])]);
       items.push(['Rename', () => this.#rename(id)]);
-      if (node.parent !== this.#rootId()) items.push(['Take it out of ' + (parent?.name ?? 'its state'), () => this.#tell('move', [id, parent?.parent])]);
+      if (node.parent !== this.#rootId()) {
+        // it comes out where it is drawn, from the box it goes into
+        items.push(['Take it out of ' + (parent?.name ?? 'its state'), () => {
+          const b = this.#box(id), out = cornerOf(this.#graph, this.#arr, parent?.parent);
+          const at = b && out ? [Math.round(b.x - out.x), Math.round(b.y - out.y)] : null;
+          this.#tell('move', [id, parent?.parent, at, this.#drawn(true)]);
+        }]);
+      }
       items.push(['Delete the state', () => this.#tell('remove', id), 'danger']);
     }
     if (!items.length) return;

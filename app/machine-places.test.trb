@@ -1,0 +1,70 @@
+Trebol [
+    title: "Where the designer draws each state: the commented block of places at the end of a file"
+    app: none
+]
+
+import %model.trb
+import %machines.trb
+import %machine-places.trb
+
+plain: rejoin [{order: machine [
+    initial charging
+    state charging []
+    final paid
+]
+}]
+
+placed: rejoin [plain {
+; layout [
+;     order [charging 40x60  paid 260x60  charging/attempt 24x40]
+; ]
+}]
+
+"reading"
+[empty? places-of plain]
+[[order [charging 40x60 paid 260x60 charging/attempt 24x40]] = places-of placed]
+[path? fifth machine-places placed 'order]
+[empty? machine-places placed 'other]
+["broken" = (attempt [places-of append copy plain "^/; layout [^/;     order [a^/; ]^/"]  "broken")]
+[empty? places-of append copy plain "^/; layout [^/;     order [a 1x2]^/"]
+[[order [a 1x2]] = places-of {x: 1  ; layout [ in a line is no block
+; layout [
+;     order [a 1x2]
+; ]
+}]
+[[1 [a 1x2]] = places-of "^/; layout [^/;     1 [a 1x2]^/; ]^/"]
+
+"writing"
+[placed = set-machine-places plain 'order [charging 40x60 paid 260x60 charging/attempt 24x40]]
+[t: set-machine-places placed 'order [charging 1x2]
+    all [[order [charging 1x2]] = places-of t  not find next find t "; layout [" "; layout ["]]
+[plain = set-machine-places placed 'order []]
+[t: set-machine-places placed 'other [a 5x5]
+    [order other] = collect [foreach [k p] places-of t [keep k]]]
+[d: design-of placed  1 = length? machines-of d]
+["long lines wrap" = (
+    many: collect [repeat i 20 [keep to word! rejoin ["state-" i]  keep 100x100]]
+    t: set-machine-places plain 'order many
+    all [many = machine-places t 'order  not find collect [foreach l split t newline [keep 100 < length? l]] true  "long lines wrap"])]
+
+"kept last"
+[placed = places-last placed]
+[t: places-last append copy placed "x: 1^/"
+    all [find t "x: 1" ";     order" = copy/part find/last t ";     order" 11  (index? find t "x: 1") < index? find t "; layout ["]]
+[plain = places-last plain]
+
+"states renamed, moved, deleted"
+[t: rename-places placed 'order 'charging 'billing
+    [billing 40x60 paid 260x60 billing/attempt 24x40] = machine-places t 'order]
+[t: rename-places placed 'order 'charging to path! [work charging]
+    [work/charging 40x60 paid 260x60 work/charging/attempt 24x40] = machine-places t 'order]
+[t: rename-places placed 'order to path! [charging attempt] 'try
+    [charging 40x60 paid 260x60 try 24x40] = machine-places t 'order]
+[t: drop-places placed 'order 'charging  [paid 260x60] = machine-places t 'order]
+[t: drop-places placed 'order 'charg  3 = ((length? machine-places t 'order) / 2)]
+[t: rename-machine-places placed 'order 'sale  [sale] = collect [foreach [k p] places-of t [keep k]]]
+[plain = rename-machine-places placed 'order none]
+
+"the key of a machine"
+['order = machine-key d: design-of plain  first machines-of d]
+[d: design-of "machine [initial a state a []]  machine [initial b state b []]"  2 = machine-key d second machines-of d]
