@@ -50,6 +50,21 @@ charging: machine-node second ms 2
 [object? machine-engine/make-machine engine-block ms second ms]
 [m: machine-engine/make-machine engine-block ms second ms  to logic! find collect [foreach n m/nodes [keep n/name]] 'attempt]
 [none? fragment-problem first ms]
+[
+    ; only the fragments written before a machine are made for it, as when the file runs
+    d2: design-of {m: machine [initial a state a [use f]]
+f: fragment [] [initial x state x []]}
+    ms2: machines-of d2
+    all [error? try [machine-engine/make-machine engine-block ms2 first ms2]  block? late-use-problem d2 ms2 first ms2]
+]
+[d: design-of code  ms: machines-of d  none? late-use-problem d ms second ms]
+[
+    ; a new fragment goes before the first machine, with the words set before it
+    d2: design-of {Trebol []^/x: 1^/a: b: machine [initial s state s []]^/}
+    t: fragment-before-machines d2 machines-of d2 {f: fragment [] []^/}
+    t = {Trebol []^/x: 1^/f: fragment [] []^/^/a: b: machine [initial s state s []]^/}
+]
+[d2: design-of {x: 1}  (fragment-before-machines d2 machines-of d2 "f") = "x: 1^/^/f"]
 [error? fragment-problem first machines-of design-of {f: fragment [1] [initial a state a []]}]
 [
     ; a fragment may use another, by the file's names

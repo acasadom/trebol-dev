@@ -97,6 +97,10 @@ redraw-machines: function [] [
 machine-problems-of: function [] [
     collect [
         foreach m ms [
+            if all [m/kind <> 'fragment  late: late-use-problem d ms m] [
+                keep make map! reduce ['at any [late/1 ""] 'message rejoin [either m/name [rejoin [m/name ": "]] [""] late/2]]
+                continue
+            ]
             e: either m/kind = 'fragment [fragment-problem m] [try [machine-engine/make-machine engine-block ms m]]
             if error? e [
                 msg: e/message
@@ -261,11 +265,20 @@ new-machine-code: function [] [
 ]
 
 machine-add: function ["What the Add menu of the machines does" item [word!]] [
-    if find [machine fragment] item [
+    if item = 'fragment [
+        code: new-fragment-code ms
+        edit fragment-before-machines d ms code
+        k: 1
+        foreach m ms [if m/name = to word! first split code #":" [break]  k: k + 1]
+        set 'picked reduce [k 1 'machine]
+        redraw
+        exit
+    ]
+    if item = 'machine [
         t: copy text
         unless any [empty? t  newline = last t] [append t newline]
         unless empty? t [append t newline]
-        edit append t either item = 'machine [new-machine-code] [new-fragment-code ms]
+        edit append t new-machine-code
         set 'picked reduce [length? ms 1 'machine]
         redraw
         exit

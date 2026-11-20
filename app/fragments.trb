@@ -1,7 +1,7 @@
 Trebol [
     title: "Fragments in the designer: pieces of machine made once, used in states, and the edits they take"
     exports: [
-        engine-block fragment-problem machine-head rename-machine delete-machine-text new-fragment-code
+        engine-block fragment-problem late-use-problem fragment-before-machines machine-head rename-machine delete-machine-text new-fragment-code
         set-use use-with-value set-use-with fragment-spec-value set-fragment-spec uses-of
     ]
 ]
@@ -11,12 +11,13 @@ import %machines.trb
 import %machine-edits.trb
 
 ; The file is never run, so the words a machine's use names are not set: to make it as the engine does,
-; for its problems or to try it, its block is copied and bound to the file's fragments, made from their text.
+; for its problems or to try it, its block is copied and bound to the fragments written before it, made
+; from their text. A fragment written after the machine is not made yet when the file runs.
 engine-block: function [
-    "A copy of a machine's block, its use words bound to the fragments of the file"
+    "A copy of a machine's block, its use words bound to the fragments written before it in the file"
     ms [block!] m [object!]
 ] [
-    frs: fragments-of ms
+    frs: fragments-before ms m
     b: copy/deep m/block
     if empty? frs [return b]
     ctx: make object! append collect [foreach f frs [keep to set-word! f/name]] none
@@ -26,6 +27,51 @@ engine-block: function [
         set in ctx f/name attempt [fragment copy/deep f/spec body]
     ]
     bind b ctx
+]
+
+fragments-before: function ["The fragments written before a machine" ms [block!] m [object!]] [
+    collect [foreach x ms [if same? x m [break]  if x/kind = 'fragment [keep x]]]
+]
+
+late-use-problem: function [
+    "The problem of a machine that uses a fragment written after it: [line:col message], or none"
+    d [object!] ms [block!] m [object!]
+] [
+    before: collect [foreach f fragments-before ms m [keep f/name]]
+    foreach n next m/nodes [
+        if all [n/uses  not find before n/uses  fragment-named ms n/uses] [
+            at: none
+            foreach k keys-of d/spots [
+                v: select d/spots k
+                if all [same? v/2 n/block  v/3 = (n/use-at + 1)] [at: k]
+            ]
+            return reduce [at rejoin ["state " n/name " uses " n/uses ", a fragment written after the machine: write it before"]]
+        ]
+    ]
+    none
+]
+
+fragment-before-machines: function [
+    "The text with a fragment's code put before the first machine that is no fragment, or at the end when there is none"
+    d [object!] ms [block!] code [string!]
+] [
+    first-m: none
+    foreach m ms [if m/kind <> 'fragment [first-m: m  break]]
+    if all [first-m  h: machine-head d first-m] [
+        pos: first span-of d h/1 h/2
+        ; the statement of the file that holds it, with the words set before it
+        top: none
+        repeat i length? d/values [if (first span-of d d/values i) <= pos [top: i]]
+        if top [
+            while [all [top > 1  set-word? pick d/values top - 1]] [top: top - 1]
+            at-i: line-start d/text first span-of d d/values top
+            return splice d/text at-i 0 rejoin [code newline]
+        ]
+    ]
+    t: copy d/text
+    unless any [empty? t  newline = last t] [append t newline]
+    unless empty? t [append t newline]
+    append t code
 ]
 
 fragment-problem: function ["What is wrong with a fragment's blanks, or none" f [object!]] [

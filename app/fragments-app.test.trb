@@ -126,7 +126,21 @@ named-node: function [g name] [foreach n g/nodes [if n/name = name [return n]]  
     machines
     click "New fragment"
     click "Save"
-    to logic! find written "^/fragment-1: fragment [] [^/    initial start^/    state start []^/]"
+    ; written before the file's first machine, since a machine can only use a fragment made before it
+    to logic! find written "^/fragment-1: fragment [] [^/    initial start^/    state start []^/]^/^/order: machine"
+]
+[
+    ; a machine that uses a fragment written after it is told, as the file would fail when it runs
+    choose "File" "shop.trb"
+    t: copy text
+    f: copy/part find t "retry:" find t "order:"
+    edit append replace t f "" f
+    choose "Edit" "Machines"
+    all [
+        not machine-problems/hidden
+        to logic! find machine-problems/data/1/message "order: state charging uses retry, a fragment written after the machine"
+        machine-problems/data/1/at = "5:25"
+    ]
 ]
 [
     machines
