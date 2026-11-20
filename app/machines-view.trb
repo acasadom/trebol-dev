@@ -84,10 +84,34 @@ redraw-machines: function [] [
     machine-tree/data: collect [foreach m ms [k: k + 1  keep node-tree m k 1]]
     machine-tree/selected: all [picked  machine-node-of tree-id picked machine-tree/data]
     machine-none/hidden: not empty? ms
+    show-machine-problems
     if editing = "Machines" [
         mark-machine
         draw-machine
         either keep-mprops [set 'keep-mprops false] [fill-mprops]
+    ]
+]
+
+; what the engine says is wrong with each machine: the first mistake it finds, where it is written
+machine-problems-of: function [] [
+    collect [
+        foreach m ms [
+            e: try [machine-engine/make-machine m/block]
+            if error? e [
+                msg: e/message
+                if find/match msg "machine: " [msg: skip msg 9]
+                keep make map! reduce ['at any [e/at ""] 'message rejoin [either m/name [rejoin [m/name ": "]] [""] msg]]
+            ]
+        ]
+    ]
+]
+
+show-machine-problems: function [] [
+    machine-problems/data: machine-problems-of
+    machine-problems/hidden: empty? machine-problems/data
+    if d [
+        n: (length? problems/data) + length? machine-problems/data
+        problem-count/text: either n = 0 ["No problems"] [rejoin [n either n = 1 [" problem"] [" problems"]]]
     ]
 ]
 

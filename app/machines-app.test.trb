@@ -305,3 +305,26 @@ machines: does [choose "File" "repair.trb"  choose "Edit" "Machines"]
         ["Ended" "By itself: held to released"] = copy/part try-lines 2
     ]
 ]
+
+"the problems of a machine"
+[
+    machines
+    write-text head replace copy text "from work to ready on fixed" "from work to readdy on fixed"
+    all [
+        not machine-problems/hidden
+        to logic! find machine-problems/data/1/message "repair: no state readdy"
+        problem-count/text = "1 problem"
+    ]
+]
+[
+    machines
+    write-text head replace copy text "state received []" "state received [timeout 5]"
+    all [
+        to logic! find machine-problems/data/1/message "received has a timeout"
+        machine-problems/data/1/at = "5:5"
+    ]
+]
+[
+    machines
+    machine-problems/hidden
+]

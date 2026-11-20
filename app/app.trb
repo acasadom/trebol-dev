@@ -446,6 +446,7 @@ view compose/deep/only [
                 ]
                 global machine-drawing: widget <tb-machine-graph> fit [graph: none selected: none]
                     on-pick [pick-machine event/detail] on-connect [machine-connect event/detail]
+                global machine-problems: table [at "Where" message "Problem"] hidden
             ]
             global code-pane: panel "Code" pad 2 [
                 global problem-text: text danger hidden ""
