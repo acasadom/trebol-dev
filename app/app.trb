@@ -391,6 +391,7 @@ add-face: function [item [word!]] [
 
 ; the machines of the file: their structure, properties and code (shares these words)
 do %machines-view.trb
+do %machine-try.trb
 
 ; the Add menu comes from the palette
 view compose/deep/only [
@@ -436,6 +437,13 @@ view compose/deep/only [
                 global problems: table [at "Where" message "Problem"] hidden
             ]
             global machine-pane: panel "Drawing" hidden [
+                row [
+                    global try-start: button small #pointer "Try" [try-machine]
+                    global try-running: row hidden [
+                        button small #refresh "Restart" [try-machine]
+                        button small #close "Stop" [stop-try none]
+                    ]
+                ]
                 global machine-drawing: widget <tb-machine-graph> fit [graph: none selected: none]
                     on-pick [pick-machine event/detail] on-connect [machine-connect event/detail]
             ]
@@ -448,6 +456,14 @@ view compose/deep/only [
         panel "Properties" pad 4 [
             global nothing-chosen: text muted "Choose a face in the structure, the preview or the code."
             global machine-props: column hidden []
+            global try-panel: column hidden [
+                text small muted "Send it an event: the buttons of those no way out takes now cannot be used."
+                global try-buttons: row []
+                global try-fields: field "Event fields" "the fields the next event carries: count: 3"
+                text small muted "Data"
+                global try-data: code ""
+                global try-history: column []
+            ]
             global props: column hidden [
                 global face-kind: code ""
                 global face-chain: text small muted ""

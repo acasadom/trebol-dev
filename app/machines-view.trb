@@ -23,6 +23,7 @@ show-editing: function [what [string!]] [
     machine-side/hidden: not machines?
     preview-pane/hidden: any [machines?  mode-f/value = "Code"]
     machine-pane/hidden: any [not machines?  mode-f/value = "Code"]
+    unless machines? [stop-try none]
     redraw
 ]
 
@@ -131,10 +132,12 @@ graph-data: function ["What the drawing of the k-th machine is given: its nodes 
 
 ; the chosen machine, or the first; none when the file makes none
 draw-machine: function [] [
+    if all [trying  text <> try-text] [stop-try "The code changed: try it again."]
     k: either picked [picked/1] [1]
     machine-drawing/props: make machine-drawing/props [
         graph: either pick ms k [graph-data k] [none]
         selected: either picked [tree-id picked] [none]
+        active: try-active
     ]
 ]
 
@@ -328,7 +331,7 @@ machine-props-code: function [] [
 ]
 
 fill-mprops: function [] [
-    if editing <> "Machines" [exit]
+    if any [editing <> "Machines"  not try-panel/hidden] [exit]
     machine-props/hidden: not picked
     nothing-chosen/hidden: to logic! picked
     props/hidden: true

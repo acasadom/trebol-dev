@@ -12,6 +12,7 @@ svg { display: block; margin: auto; font: ${C}; user-select: none; touch-action:
 .node.edge { cursor: crosshair; }
 .node:focus-visible > .box { stroke: var(--tb-focus, var(--tb-primary, #2563eb)); stroke-width: 2.5; }
 .node.active > .box { fill: color-mix(in oklch, var(--tb-success, #16a34a) 18%, var(--tb-surface, #fff)); stroke: var(--tb-success, #16a34a); }
+:is(.group, .parallel).active > .box { fill: color-mix(in oklch, var(--tb-success, #16a34a) 6%, var(--tb-surface, #fff)); }
 .node.selected > .box, .node.selected > .inner { stroke: var(--tb-primary, #2563eb); stroke-width: 2.25; }
 .node.selected > .box { fill: var(--tb-primary-soft, #eef3ff); }
 .node.target > .box { stroke: var(--tb-primary, #2563eb); stroke-width: 2.25; stroke-dasharray: none; }

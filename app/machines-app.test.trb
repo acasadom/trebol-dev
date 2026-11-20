@@ -17,6 +17,19 @@ repair: machine [
     from work to ready on fixed
 ]
 }
+    "booking.trb" {Trebol [title: "Bookings"]
+
+booking: machine [
+    data [paid: 0]
+    shared bikes
+    initial held
+    state held [timeout 0:15]
+    state paid []
+    final released
+    from held to paid on pay set [paid: data/paid + event/amount]
+    from held to released on timeout
+]
+}
     "app.trb" {Trebol [title: "Signup"]
 
 view [heading "Join us"]
@@ -25,7 +38,7 @@ view [heading "Join us"]
 written: none
 
 serve [
-    GET "/api/files" [#(name: "shop" files: ["app.trb" "repair.trb"])]
+    GET "/api/files" [#(name: "shop" files: ["app.trb" "booking.trb" "repair.trb"])]
     GET "/api/file" [select disk query/path]
     PUT "/api/file" [written: body  "Saved."]
 ]
@@ -213,4 +226,82 @@ machines: does [choose "File" "repair.trb"  choose "Edit" "Machines"]
     machines
     machine-connect ["s1.2" "s2.2"]
     see/not "on go"
+]
+
+"trying a machine"
+[
+    ; a button per event; those no way out takes now cannot be used
+    machines
+    click "Try"
+    fixed: none
+    foreach f try-buttons/pane [if f/text = "fixed" [fixed: f]]
+    all [
+        not try-running/hidden
+        try-start/hidden
+        fixed/disabled
+        machine-drawing/props/active = ["s1.2"]
+        to logic! find first try-lines "Started in received"
+    ]
+]
+[
+    ; an event moves it: the states it is in are lit, and what happened is told
+    machines
+    click "Try"
+    click "start"
+    all [
+        machine-drawing/props/active = ["s1.3" "s1.4"]
+        "start: received to work/checking" = first try-lines
+    ]
+]
+[
+    ; a change to the code stops it
+    machines
+    click "Try"
+    click "state received (initial)"
+    write-text head replace copy text "state received" "state arrived"
+    all [
+        none? trying
+        try-running/hidden
+        try-panel/hidden
+        not machine-props/hidden
+        machine-drawing/props/active = []
+        "The code changed: try it again." = first try-lines
+    ]
+]
+[
+    ; a timeout at once; the data it changes; shared with no tab while tried
+    choose "File" "booking.trb"
+    choose "Edit" "Machines"
+    click "Try"
+    see "Time out held"
+    click "Time out held"
+    all [
+        ["Ended" "timeout: held to released"] = copy/part try-lines 2
+        none? trying/channel
+    ]
+]
+[
+    choose "File" "booking.trb"
+    choose "Edit" "Machines"
+    click "Try"
+    ; the fields the event carries
+    type "Event fields" "amount: 5"
+    click "pay"
+    all [
+        try-data/text = "paid: 5"
+        ; paid has no way out: the machine ends there
+        ["Ended" "pay: held to paid"] = copy/part try-lines 2
+    ]
+]
+[
+    ; a timer that goes off by itself
+    choose "File" "booking.trb"
+    choose "Edit" "Machines"
+    write-text head replace copy text "timeout 0:15" "timeout 0.1"
+    click "Try"
+    wait 0.3
+    all [
+        none? find try-buttons/pane/1/text "Time out"
+        ["Ended" "By itself: held to released"] = copy/part try-lines 2
+    ]
 ]
