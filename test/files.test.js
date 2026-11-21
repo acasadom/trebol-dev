@@ -4,7 +4,8 @@ import { mkdirSync, mkdtempSync, readFileSync, realpathSync, symlinkSync, writeF
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Readable } from 'node:stream';
-import { fileOf, handleApi, listFiles, trusted } from '../server/files.js';
+import { fileOf, handleApi, listFiles, trusted, versionOf } from '../server/files.js';
+import { readdirSync } from 'node:fs';
 
 function project() {
   const root = realpathSync(mkdtempSync(join(tmpdir(), 'trebol-dev-')));
@@ -29,7 +30,7 @@ const local = { host: 'localhost:5180', 'x-trebol-dev': '1' };
 async function ask(root, method, path, { headers = local, body = '' } = {}) {
   process.env.TREBOL_DEV_PROJECT = root;
   const req = Object.assign(Readable.from(body === '' ? [] : [Buffer.from(body)]), { method, headers });
-  const res = { status: 0, body: '', writeHead(s) { this.status = s; }, end(b) { this.body = String(b ?? ''); } };
+  const res = { status: 0, body: '', headers: {}, writeHead(s, h) { this.status = s; this.headers = h ?? {}; }, end(b) { this.body = String(b ?? ''); } };
   const answered = await handleApi(req, res, new URL(path, 'http://localhost:5180'));
   return { answered, ...res };
 }
@@ -74,4 +75,29 @@ test('only a page of the designer may ask', async () => {
   }
   assert.equal(readFileSync(join(root, 'app.trb'), 'utf8'), 'Trebol []\nview [text "a"]\n');
   assert.equal((await ask(root, 'GET', '/other')).answered, false);
+});
+
+test('a save names the version it read: a file changed outside since is not written over', async () => {
+  const root = project();
+  const read = await ask(root, 'GET', '/api/file?path=app.trb');
+  const v = versionOf(read.body);
+  assert.equal(read.headers.etag, `"${v}"`);
+  // someone edits the file in another editor
+  writeFileSync(join(root, 'app.trb'), 'Trebol []\nview [text "b"]\n');
+  const late = await ask(root, 'PUT', `/api/file?path=app.trb&base=${v}`, { body: 'mine' });
+  assert.equal(late.status, 412);
+  assert.equal(late.headers.etag, `"${versionOf('Trebol []\nview [text "b"]\n')}"`);
+  assert.equal(readFileSync(join(root, 'app.trb'), 'utf8'), 'Trebol []\nview [text "b"]\n');
+  // the version on disk now, in any case, lets the save through
+  const now = versionOf('Trebol []\nview [text "b"]\n').toUpperCase();
+  const ok = await ask(root, 'PUT', `/api/file?path=app.trb&base=${now}`, { body: 'mine' });
+  assert.equal(ok.status, 200);
+  assert.equal(ok.headers.etag, `"${versionOf('mine')}"`);
+  assert.equal(readFileSync(join(root, 'app.trb'), 'utf8'), 'mine');
+  // a file gone since it was read is a conflict too; with no base the save writes as before
+  const gone = await ask(root, 'PUT', `/api/file?path=new.trb&base=${v}`, { body: 'x' });
+  assert.equal(gone.status, 412);
+  assert.equal((await ask(root, 'PUT', '/api/file?path=new.trb', { body: 'x' })).status, 200);
+  // the write is whole: no file is left beside the ones saved
+  assert.deepEqual(readdirSync(root).filter(n => n.endsWith('.tmp')), []);
 });

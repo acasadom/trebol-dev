@@ -1,0 +1,87 @@
+Trebol [title: "The designer: a file changed outside it"  app: %app.trb]
+
+; the file as the designer opens it, and as another editor leaves it meanwhile
+texts: #(
+    opened: {Trebol [title: "Signup"]
+
+view [
+    heading "Join us"
+    field name "Name"
+]
+}
+    outside: {Trebol [title: "Signup"]
+
+view [
+    heading "Join us today"
+    field name "Name"
+]
+}
+)
+opened: texts/opened
+outside: texts/outside
+; each test starts from the file as opened (a file! name, as a string here would start a group)
+disk: make map! reduce [form %app.trb  copy opened]
+written: none
+version: func [t [string!]] [lowercase enbase/base checksum t 'sha256 16]
+
+serve [
+    GET "/api/files" [#(name: "shop" files: ["app.trb"])]
+    GET "/api/file" [select disk query/path]
+    ; as the server does: a save that read another version than the one on disk is refused
+    PUT "/api/file" [
+        either all [query/base  query/base <> version select disk query/path] [
+            reply 412 "The file changed since it was read."
+        ] [
+            put disk query/path body
+            written: body
+            "Saved."
+        ]
+    ]
+]
+
+rename-field: does [
+    click {field name "Name"}
+    type "Text" "Full name"
+    see {field name "Full name"}
+]
+
+"a save names the version it read"
+[
+    rename-field
+    click "Save"
+    see "Saved"
+    all [written  find written {"Full name"}  (select disk "app.trb") = written]
+]
+
+"a file changed outside since it was read is not saved over unless the person says so"
+[
+    rename-field
+    put disk "app.trb" copy outside
+    say false
+    click "Save"
+    ; the file is read again: the change made outside shows, and nothing was written
+    see {heading "Join us today"}
+    see " is read again"
+    to logic! all [none? written  (select disk "app.trb") = outside]
+]
+[
+    rename-field
+    put disk "app.trb" copy outside
+    say false
+    click "Save"
+    see {heading "Join us today"}
+    ; what was here is one undo away, and saving it now writes over the read file with no question
+    click "Undo"
+    see {field name "Full name"}
+    click "Save"
+    see "Saved"
+    to logic! all [written  find written {"Full name"}  not find written "today"]
+]
+[
+    rename-field
+    put disk "app.trb" copy outside
+    say true
+    click "Save"
+    see "Saved"
+    to logic! all [written  find written {"Full name"}  not find written "today"]
+]
