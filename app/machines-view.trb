@@ -136,7 +136,7 @@ machine-problems-of: function [] [
 
 ; "No problems", "2 problems", "1 problem, 1 warning", "No problems, 2 warnings"
 problem-count-text: function [n [integer!] w [integer!]] [
-    t: either n = 0 ["No problems"] [rejoin [n either n = 1 [" problem"] [" problems"]]]
+    t: copy either n = 0 ["No problems"] [rejoin [n either n = 1 [" problem"] [" problems"]]]
     if w > 0 [append t rejoin [", " w either w = 1 [" warning"] [" warnings"]]]
     t
 ]
