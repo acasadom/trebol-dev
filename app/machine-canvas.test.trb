@@ -1,0 +1,265 @@
+Trebol [title: "The designer's machine canvas: a machine made from nothing with the drawing alone"  app: %app.trb]
+
+; The drawing tells the designer what the person did as events (add, connect, grow, rename, move, remove,
+; initial); these tests send the same ones, as the drawing would, from a file with no machine.
+
+disk: #(
+    "app.trb" {Trebol [title: "Cog & Chain"]
+
+view [
+    title "Cog & Chain"
+]
+}
+)
+written: none
+
+serve [
+    GET "/api/files" [#(name: "cog-and-chain" files: ["app.trb"])]
+    GET "/api/file" [select disk query/path]
+    PUT "/api/file" [written: body  "Saved."]
+]
+
+open-machines: does [choose "File" "app.trb"  choose "Edit" "Machines"]
+
+; the drawing's id of a state of the first machine, by its name
+sid: function [name] [
+    foreach n select first ms 'nodes [if n/name = to word! name [return rejoin ["s1." n/id]]]
+    none
+]
+
+; what the person does in the drawing, by names
+add-in: function [kind [string!] where] [canvas-add reduce [kind either where [sid where] ["m1.1"]]]
+named: function [old new] [canvas-rename reduce [sid old new]]
+join: function [a b] [canvas-connect reduce [sid a sid b]]
+way-id: does [tree-id picked]
+
+; the repair machine, made step by step as the tutorial does
+build: does [
+    canvas-add ["machine" none]
+    type "name" "repair"
+    named "start" "received"
+    add-in "state" none  named "state" "work"
+    add-in "state" "work"  named "state" "checking"
+    add-in "state" "work"  named "state" "waiting"
+    canvas-grow sid "waiting"  named "state" "fixing"
+    add-in "final" none  named "done" "ready"
+    join "received" "work"  canvas-rename reduce [way-id "start"]
+    join "checking" "waiting"  canvas-rename reduce [way-id "need-parts"]
+    join "checking" "fixing"  canvas-rename reduce [way-id "fixable"]
+    join "work" "ready"  canvas-rename reduce [way-id "fixed"]
+]
+
+"an empty file"
+[
+    ; the drawing offers to make one
+    open-machines
+    all [none? machine-drawing/props/graph  not machine-none/hidden]
+]
+[
+    ; New machine: a machine with its first state, drawn
+    open-machines
+    canvas-add ["machine" none]
+    g: machine-drawing/props/graph
+    all [
+        2 = length? g/nodes
+        "start" = g/nodes/2/name
+        picked = [1 1 machine]
+    ]
+]
+
+"states from the bar and double clicks"
+[
+    ; a state dropped in the machine: beside the others, chosen, its name open for typing
+    open-machines
+    canvas-add ["machine" none]
+    add-in "state" none
+    all [
+        picked = reduce [1 3 'state]
+        machine-drawing/props/editing = "s1.3"
+        to logic! find text "state start []^/    state state []"
+    ]
+]
+[
+    ; the name typed in place
+    open-machines
+    canvas-add ["machine" none]
+    add-in "state" none
+    named "state" "work"
+    all [
+        to logic! find text "state work []"
+        none? machine-drawing/props/editing
+    ]
+]
+[
+    ; dropped into a box: inside that state, the first one being its initial
+    open-machines
+    canvas-add ["machine" none]
+    add-in "state" "start"
+    to logic! find text "state start [^/        initial state^/        state state []^/    ]"
+]
+[
+    ; a final state dropped on a final one goes beside it
+    open-machines
+    canvas-add ["machine" none]
+    add-in "final" none
+    add-in "state" "done"
+    to logic! find text "final done^/    state state []"
+]
+[
+    ; a name taken or no word: nothing changes
+    open-machines
+    canvas-add ["machine" none]
+    add-in "state" none
+    before: copy text
+    named "state" "start"
+    named "start" "two words"
+    text = before
+]
+
+"ways"
+[
+    ; dragged from the dots of a state onto another: a way, its event open for typing
+    open-machines
+    canvas-add ["machine" none]
+    add-in "state" none
+    join "start" "state"
+    all [
+        to logic! find text "from start to state on go"
+        picked/3 = 'way
+        machine-drawing/props/editing = way-id
+    ]
+]
+[
+    ; its events typed in place
+    open-machines
+    canvas-add ["machine" none]
+    add-in "state" none
+    join "start" "state"
+    canvas-rename reduce [way-id "begin resume"]
+    to logic! find text "from start to state on [begin resume]"
+]
+[
+    ; dragged onto an empty spot: a new state and a way to it
+    open-machines
+    canvas-add ["machine" none]
+    canvas-grow sid "start"
+    all [
+        to logic! find text "state state []"
+        to logic! find text "from start to state on go"
+        machine-drawing/props/editing = sid "state"
+    ]
+]
+
+"the repair machine, from nothing"
+[
+    open-machines
+    build
+    click "Save"
+    m: machines-of design-of written
+    all [
+        to logic! find written "repair: machine ["
+        to logic! find written "state work [^/        initial checking"
+        to logic! find written "from checking to waiting on need-parts"
+        to logic! find written "from waiting to fixing on go"
+        to logic! find written "from received to work on start"
+        to logic! find written "from work to ready on fixed"
+        to logic! find written "final ready"
+        empty? machine-problems/data
+        object? machine-engine/make-machine select first m 'block
+    ]
+]
+[
+    ; tried at once
+    open-machines
+    build
+    try-machine
+    click "start"
+    all [
+        machine-drawing/props/active = reduce [sid "work" sid "checking"]
+        "start: received to work/checking" = first try-lines
+    ]
+]
+
+"moving a state into another"
+[
+    ; into a box: its ways go with it, and those into it are written anew
+    open-machines
+    build
+    add-in "state" none  named "state" "parts"
+    join "parts" "fixing"
+    join "waiting" "parts"
+    canvas-move reduce [sid "parts" sid "work"]
+    t: text
+    all [
+        empty? machine-problems/data
+        ; written inside work now, after its last state, with the way out of it
+        to logic! find t "state fixing []^/        state parts []^/        from parts to fixing on go"
+        to logic! find t "from waiting to parts on go"
+        picked = reduce [1 to integer! last split sid "parts" #"." 'state]
+    ]
+]
+[
+    ; out of a box, to the machine: ways into it from inside still find it
+    open-machines
+    build
+    canvas-move reduce [sid "fixing" "m1.1"]
+    all [
+        empty? machine-problems/data
+        to logic! find text "from waiting to fixing on go"
+        to logic! find text "final ready^/    state fixing []"
+    ]
+]
+[
+    ; the initial state moved out: its level starts in the next one, its ways out go with it and name the
+    ; states inside work by their paths; nothing leads to it now, which the problems say
+    open-machines
+    build
+    canvas-move reduce [sid "checking" "m1.1"]
+    all [
+        to logic! find text "initial waiting"
+        to logic! find text "from checking to work/waiting on need-parts"
+        to logic! find machine-problems/data/1/message "no way leads to state checking"
+    ]
+]
+[
+    ; not into itself, nor into a state inside it, nor into a final state
+    open-machines
+    build
+    before: copy text
+    canvas-move reduce [sid "work" sid "checking"]
+    canvas-move reduce [sid "received" sid "ready"]
+    text = before
+]
+[
+    ; one Undo takes a move back
+    open-machines
+    build
+    before: copy text
+    canvas-move reduce [sid "fixing" "m1.1"]
+    undo-change
+    text = before
+]
+
+"the right click and Delete"
+[
+    open-machines
+    build
+    canvas-initial sid "waiting"
+    to logic! find text "initial waiting"
+]
+[
+    open-machines
+    build
+    canvas-remove sid "waiting"
+    all [
+        not find text "waiting"
+        none? picked
+    ]
+]
+[
+    open-machines
+    build
+    join "checking" "fixing"
+    canvas-remove way-id
+    1 = length? collect [foreach w select first ms 'ways [if all ["fixable" = way-label w] [keep w]]]
+]

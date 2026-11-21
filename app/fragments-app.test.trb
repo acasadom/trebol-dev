@@ -1,0 +1,173 @@
+Trebol [title: "The designer's fragments: screen tests"  app: %app.trb]
+
+disk: #(
+    "shop.trb" {Trebol [title: "Shop"]
+
+retry: fragment [work [block!]] [
+    initial attempt
+    state attempt [on-enter work]
+    state waiting []
+    from attempt to waiting on fail
+    from waiting to attempt on again
+]
+order: machine [
+    initial charging
+    state charging [use retry with [work: [print "charge"]]]
+    final paid
+    from charging to paid on ok
+]
+}
+)
+written: none
+
+serve [
+    GET "/api/files" [#(name: "shop" files: ["shop.trb"])]
+    GET "/api/file" [select disk query/path]
+    PUT "/api/file" [written: body  "Saved."]
+]
+
+machines: does [choose "File" "shop.trb"  choose "Edit" "Machines"]
+named-node: function [g name] [foreach n g/nodes [if n/name = name [return n]]  none]
+
+"listed with the machines"
+[
+    machines
+    see "retry: fragment"
+    see "order: machine"
+    see "state charging uses retry (initial)"
+]
+[
+    ; no problems: the file's fragments are given to the machine that uses them
+    machines
+    machine-problems/hidden
+]
+[
+    ; a fragment that is wrong is told, and so is a machine that uses one that is not there
+    choose "File" "shop.trb"
+    edit replace copy text "[work [block!]]" "[work [nothing!]]"
+    choose "Edit" "Machines"
+    not machine-problems/hidden
+]
+
+"its own drawing"
+[
+    machines
+    pick-machine "m1.1"
+    g: machine-drawing/props/graph
+    all [g/kind = "fragment"  g/name = "retry"  named-node g "attempt"  not named-node g "charging"]
+]
+[
+    machines
+    pick-machine "m1.1"
+    see "A piece of machine made once"
+    see "1 state uses it."
+    see "blanks"
+]
+
+"a state that uses one"
+[
+    machines
+    pick-machine "m2.1"
+    g: machine-drawing/props/graph
+    n: named-node g "charging"
+    all [g/kind = "machine"  n/uses = "retry"  not named-node g "attempt"]
+]
+[
+    ; opened, the fragment's states are drawn inside it, fixed, and choosing them chooses the state
+    machines
+    pick-machine "m2.1"
+    toggle-open "s2.2"
+    g: machine-drawing/props/graph
+    a: named-node g "attempt"
+    all [
+        a/fixed  a/owner = "s2.2"  a/parent = "s2.2"  a/initial
+        a/id = "u2.2:2"
+        2 = length? collect [foreach w g/ways [if w/fixed [keep w]]]
+        (canvas-place a/id) = [2 2 state]
+    ]
+]
+[
+    machines
+    pick-machine "s2.2"
+    see "use"
+    see "with"
+    see "Edit retry"
+]
+[
+    ; Edit opens the fragment's drawing
+    machines
+    open-fragment "retry"
+    "retry" = select machine-drawing/props/graph 'name
+]
+
+"the edits"
+[
+    machines
+    pick-machine "m1.1"
+    type "name" "again"
+    click "Save"
+    to logic! all [find written "again: fragment [work"  find written "use again with"  not find written "retry"]
+]
+[
+    machines
+    pick-machine "s2.2"
+    machine-act 'use-with "work: [print 1]"
+    click "Save"
+    to logic! find written "use retry with [work: [print 1]]"
+]
+[
+    machines
+    click "state charging uses retry (initial)"
+    choose "use" "(none)"
+    click "Save"
+    to logic! find written "state charging []"
+]
+[
+    machines
+    click "New fragment"
+    click "Save"
+    ; written before the file's first machine, since a machine can only use a fragment made before it
+    to logic! find written "^/fragment-1: fragment [] [^/    initial start^/    state start []^/]^/^/order: machine"
+]
+[
+    ; a machine that uses a fragment written after it is told, as the file would fail when it runs
+    choose "File" "shop.trb"
+    t: copy text
+    f: copy/part find t "retry:" find t "order:"
+    edit append replace t f "" f
+    choose "Edit" "Machines"
+    all [
+        not machine-problems/hidden
+        to logic! find machine-problems/data/1/message "order: state charging uses retry, a fragment written after the machine"
+        machine-problems/data/1/at = "5:25"
+    ]
+]
+[
+    machines
+    pick-machine "m1.1"
+    machine-act 'spec "work [block!] wait [integer!]"
+    click "Save"
+    to logic! find written "retry: fragment [work [block!] wait [integer!]] ["
+]
+
+"trying a machine that uses one"
+[
+    machines
+    pick-machine "m2.1"
+    try-machine
+    a: machine-drawing/props/active = ["s2.2"]
+    toggle-open "s2.2"
+    b: machine-drawing/props/active
+    stop-try none
+    all [a  b = ["s2.2" "u2.2:2"]]
+]
+
+"open stays with the states that use one"
+[
+    machines
+    pick-machine "m2.1"
+    toggle-open "s2.2"
+    click "state charging uses retry (initial)"
+    choose "use" "(none)"
+    empty? opened
+]

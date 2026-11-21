@@ -1,0 +1,157 @@
+Trebol [
+    title: "The designer's machine canvas: what the drawing's bar, drags, double clicks and menus do"
+]
+
+; Run by app.trb (do), after machines-view.trb and machine-try.trb, so it shares their words. The drawing
+; (<tb-machine-graph>) tells what the person did, by the ids of the structure ("s1.4"); each handler makes the
+; edit, chooses what it made, and asks the drawing to let the person type its name there.
+
+edit-next: none          ; the id whose name the drawing opens for typing when it is drawn next
+
+canvas-place: function ["[k id what] of an id of the drawing, or none" id] [
+    unless string? id [return none]
+    what: select [#"m" machine #"s" state #"w" way #"u" state #"v" state] first id
+    parts: split next id #"."
+    ; what is drawn inside a state from the fragment it uses is that state's: u1.3:2 is s1.3
+    if all [what  2 = length? parts  find "uv" first id] [parts/2: first split parts/2 #":"]
+    all [what  2 = length? parts  attempt [reduce [to integer! parts/1 to integer! parts/2 what]]]
+]
+
+; what is chosen, by the name of a state of the k-th machine, once the text is read again
+pick-state-named: function [k [integer!] name] [
+    foreach n select pick ms k 'nodes [if n/name = name [set 'picked reduce [k n/id 'state]]]
+]
+
+; The drawing sends, with an edit made where the person pointed, where every state of the machine is drawn
+; now, by id: [id x y ...]. They are written first, so that the states it put where there was room stay there;
+; the edit is made on that text, in one change for Undo.
+keep-drawn: function [k [integer!] drawn] [
+    unless all [block? drawn  not empty? drawn  m: pick ms k] [return text]
+    out: copy []
+    foreach [id x y] drawn [
+        p: canvas-place id
+        if all [p  p/1 = k  p/3 = 'state  p/2 > 1  machine-node m p/2  number? x  number? y] [
+            append out reduce [state-key machine-path m p/2  as-pair to integer! round x to integer! round y]
+        ]
+    ]
+    set-machine-places text machine-key d m out
+]
+
+; the path a state named so has, in a state (or the machine, 1)
+path-in: function [m [object!] at [integer!] name [word!]] [
+    append either at = 1 [copy []] [machine-path m at] name
+]
+
+xy-of: function [v] [if all [block? v  2 = length? v  number? v/1  number? v/2] [as-pair to integer! round v/1 to integer! round v/2]]
+
+canvas-add: function ["detail: [kind parent] or [kind parent [x y] drawn], x y from the top-left corner of parent" detail [block!]] [
+    kind: to word! first detail
+    if kind = 'machine [machine-add 'machine  exit]
+    unless all [p: canvas-place second detail  pick ms p/1] [exit]
+    k: p/1
+    t: keep-drawn k pick detail 4
+    d0: design-of t
+    m: pick machines-of d0 k
+    at: p/2
+    if 'final = select machine-node m at 'kind [at: select machine-node m at 'parent]
+    name: fresh-state-name m select [state state final done parallel together] kind
+    unless t: add-state d0 m at name kind [exit]
+    if xy: xy-of pick detail 3 [t: put-place t machine-key d0 m path-in m at name xy]
+    edit t
+    pick-state-named k name
+    set 'edit-next tree-id picked
+    redraw
+]
+
+canvas-connect: function [detail [block!]] [
+    machine-connect detail
+    if all [picked  picked/3 = 'way] [
+        set 'edit-next tree-id picked
+        redraw
+    ]
+]
+
+canvas-grow: function ["detail: from, or [from [x y] drawn], x y from the top-left corner of the box from is in" detail] [
+    unless block? detail [detail: reduce [detail]]
+    unless all [p: canvas-place first detail  pick ms p/1] [exit]
+    k: p/1
+    t: keep-drawn k pick detail 3
+    d0: design-of t
+    m: pick machines-of d0 k
+    name: fresh-state-name m 'state
+    unless t: grow-state d0 m p/2 name 'go [
+        toast "A region of a parallel state has no ways of its own: draw one inside it"
+        exit
+    ]
+    if xy: xy-of pick detail 2 [t: put-place t machine-key d0 m path-in m select machine-node m p/2 'parent name xy]
+    edit t
+    pick-state-named k name
+    set 'edit-next tree-id picked
+    redraw
+]
+
+canvas-rename: function [detail [block!]] [
+    unless all [p: canvas-place first detail  m: pick ms p/1] [exit]
+    typed: second detail
+    t: either p/3 = 'way [
+        rename-way-events d m pick m/ways p/2 typed
+    ] [
+        v: attempt [load typed]
+        case [
+            not word? :v [toast "A state's name is one word, as checking or on-hold"  none]
+            find state-names m v [toast rejoin ["A state is already called " v]  none]
+            find machine-keywords v [toast rejoin [v " is a word of machine: call the state something else"]  none]
+            true [rename-state d m p/2 v]
+        ]
+    ]
+    unless t [exit]
+    edit t
+    set 'picked p
+    redraw
+]
+
+canvas-remove: function [id] [
+    unless all [p: canvas-place id  m: pick ms p/1] [exit]
+    t: switch p/3 [
+        state [delete-state d m p/2]
+        way [delete-way d m pick m/ways p/2]
+    ]
+    unless t [exit]
+    edit t
+    set 'picked none
+    redraw
+]
+
+canvas-initial: function [id] [
+    unless all [p: canvas-place id  m: pick ms p/1] [exit]
+    unless t: set-initial d m p/2 [exit]
+    edit t
+    set 'picked p
+    redraw
+]
+
+canvas-move: function ["detail: [id into] or [id into [x y] drawn], x y from the top-left corner of into" detail [block!]] [
+    unless all [p: canvas-place first detail  pick ms p/1  into: canvas-place second detail] [exit]
+    k: p/1
+    t: keep-drawn k pick detail 4
+    d0: design-of t
+    m: pick machines-of d0 k
+    name: select machine-node m p/2 'name
+    unless into/2 = select machine-node m p/2 'parent [
+        unless t: move-state d0 m p/2 into/2 [
+            toast "It cannot go there"
+            exit
+        ]
+    ]
+    if xy: xy-of pick detail 3 [t: put-place t machine-key d0 m path-in m into/2 name xy]
+    edit t
+    pick-state-named k name
+    redraw
+]
+
+; a state dragged in its own box, or the whole machine tidied: where every state is drawn now
+canvas-placed: function ["detail: [id x y ...]" drawn [block!]] [
+    unless all [not empty? drawn  p: canvas-place first drawn] [exit]
+    t: keep-drawn p/1 drawn
+    if t <> text [edit t  redraw]
+]

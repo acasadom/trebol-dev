@@ -1,0 +1,121 @@
+Trebol [
+    title: "The edits of a machine made by dragging on its drawing: a state put into another, a state and a way at once"
+    exports: [move-state grow-state machine-index rename-way-events]
+]
+
+import %model.trb
+import %machines.trb
+import %machine-edits.trb
+import %machine-places.trb
+
+; Each edit gives the file's new text, or none when it cannot be made, as those of machine-edits.trb do. They
+; are made in steps, the design read again from the text between them, and give the text at the end: one
+; change for Undo. States are found again after a step by their names, which the designer keeps apart.
+
+machine-index: function ["The place of a machine among those of a design" d [object!] m [object!]] [
+    k: 0
+    foreach x machines-of d [k: k + 1  if same? x/block m/block [return k]]
+    none
+]
+
+node-named: function [m [object!] name] [
+    found: none
+    foreach n next m/nodes [
+        if n/name = name [
+            if found [return none]      ; two of that name: none is the one meant
+            found: n/id
+        ]
+    ]
+    found
+]
+
+; The ways' targets written as the engine finds them from where each way is, once states have moved.
+fix-targets: function [text [string!] k [integer!]] [
+    d: design-of text
+    m: pick machines-of d k
+    changes: copy []
+    foreach w m/ways [
+        foreach [b i] w/targets [
+            v: pick b i
+            name: either path? :v [last v] [:v]
+            if all [word? :name  id: node-named m name] [
+                want: target-name m w/level id
+                if all [want  want <> :v] [append changes value-change d b i mold want]
+            ]
+        ]
+    ]
+    either empty? changes [text] [apply-changes d/text changes]
+]
+
+; The code written from an index on, as lines with the first one's indent taken off the rest.
+code-at: function [d [object!] s [pair!]] [
+    code: copy/part at d/text s/x s/y
+    indent: indent-at d/text s/x
+    either empty? indent [code] [replace/all code rejoin [newline indent] newline]
+]
+
+move-state: function [
+    "The text with a state put inside another state, or in the machine: its ways out go with it, and every way into it is written anew"
+    d [object!] m [object!] id [integer!] into [integer!]
+] [
+    n: machine-node m id
+    to-node: machine-node m into
+    if any [id = 1  into = n/parent  inside-state? m into id  to-node/kind = 'final] [return none]
+    k: machine-index d m
+    p: machine-node m n/parent
+    ; out: the state, and the ways out of it written beside it
+    code: code-at d range-span d n/holder n/from n/to
+    changes: cut-change d n/holder n/from n/to
+    foreach w m/ways [
+        if all [w/level = n/parent  w/source = n/name] [
+            append code rejoin [newline code-at d range-span d w/block w/from w/to]
+            append changes cut-change d w/block w/from w/to
+        ]
+    ]
+    if all [p/initial = n/name  p/initial-at] [
+        others: exclude copy p/children reduce [id]
+        append changes either empty? others [
+            cut-change d p/block p/initial-at p/initial-at + 1
+        ] [
+            value-change d p/block p/initial-at + 1 form select machine-node m first others 'name
+        ]
+    ]
+    t: apply-changes d/text changes
+    ; in: after the last state of its new place, the first one of a place with none being its initial
+    d2: attempt [design-of t]
+    unless all [d2  m2: pick machines-of d2 k] [return none]
+    place: either into = 1 [1] [node-named m2 to-node/name]
+    unless place [return none]
+    q: machine-node m2 place
+    if all [empty? q/children  q/kind <> 'parallel] [code: rejoin ["initial " n/name newline code]]
+    k2: either empty? q/children [if q/initial-at [q/initial-at + 1]] [select machine-node m2 last q/children 'to]
+    t: into-node d2 q k2 code
+    unless t: attempt [fix-targets t k] [return none]
+    ; its places, and those of the states inside it, go where it went
+    new: append either into = 1 [copy []] [machine-path m into] n/name
+    rename-places t machine-key d m to path! machine-path m id to path! new
+]
+
+grow-state: function [
+    "The text with a new state beside one, and a way from that one to it on an event"
+    d [object!] m [object!] from [integer!] name [word!] event [word!]
+] [
+    s: machine-node m from
+    level: machine-node m s/parent
+    ; the regions of a parallel state have no ways between them
+    if any [from = 1  level/kind = 'parallel] [return none]
+    k: machine-index d m
+    unless t: add-state d m level/id name 'state [return none]
+    d2: design-of t
+    m2: pick machines-of d2 k
+    add-way d2 m2 node-named m2 s/name node-named m2 name event
+]
+
+rename-way-events: function [
+    "The text with the events of a way as typed: start, start resume or [start resume]"
+    d [object!] m [object!] w [object!] typed [string!]
+] [
+    v: attempt [load/all typed]
+    if all [block? v  1 = length? v  block? first v] [v: first v]
+    either all [block? v  not empty? v  parse v [some word!]] [set-way-events d m w v] [none]
+]

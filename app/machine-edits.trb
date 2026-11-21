@@ -1,0 +1,340 @@
+Trebol [
+    title: "The edits of a machine: each gives the file's new text, changing only the values it must"
+    exports: [
+        add-state rename-state delete-state set-initial
+        add-way delete-way set-way-events set-way-target set-way-code
+        set-state-word state-word-value way-code range-span
+        apply-changes cut-change value-change into-node target-name
+    ]
+]
+
+import %model.trb
+import %machines.trb
+import %machine-places.trb
+
+; As with faces, an edit takes a design and a machine read from it and gives new text, or none when it
+; cannot be made (a name taken, a way between the states of a parallel state). Comments, spacing and
+; the order things are written in stay as they were; the designer reads the new text again.
+
+range-span: function ["Where the values from one index to another of a loaded block sit, as one span" d [object!] b [block!] from [integer!] to [integer!]] [
+    s: span-of d b from
+    e: span-of d b to
+    as-pair s/x e/x + e/y - s/x
+]
+
+; Changes are [index length new] in the text, new none to cut; made from the last one back, so the
+; indexes of those before stay right.
+apply-changes: function [text [string!] changes [block!]] [
+    order: copy []
+    foreach [x len new] changes [append/only order reduce [x len new]]
+    sort/compare order func [a b] [a/1 > b/1]
+    foreach c order [
+        text: either c/3 [splice text c/1 c/2 c/3] [cut text as-pair c/1 c/2]
+    ]
+    text
+]
+
+value-change: function [d [object!] b [block!] k [integer!] new [string!]] [
+    s: span-of d b k
+    reduce [s/x s/y new]
+]
+
+cut-change: function [d [object!] b [block!] from [integer!] to [integer!]] [
+    s: range-span d b from to
+    reduce [s/x s/y none]
+]
+
+; New code on its own line after the value at an index of a block, indented as that value's line is.
+after-value: function [d [object!] b [block!] k [integer!] code [string!]] [
+    s: span-of d b k
+    indent: indent-at d/text s/x
+    if more-on-line? d/text s/x + s/y [
+        ; a block written on one line, [initial a state a []]: beside the value
+        unless find code newline [return splice d/text s/x + s/y 0 rejoin ["  " code]]
+    ]
+    n: after-line d/text s/x + s/y
+    splice d/text n 0 rejoin [newline indent replace/all copy code newline rejoin [newline indent]]
+]
+
+; New code as the first value of a block, before what it holds.
+at-start: function [d [object!] b [block!] code [string!]] [
+    if empty? b [return insert-into d b code]
+    s: span-of d b 1
+    owner: block-span d b
+    either all [
+        (line-start d/text s/x) > owner/x
+        blank? copy/part at d/text line-start d/text s/x s/x - line-start d/text s/x
+    ] [
+        indent: indent-at d/text s/x
+        splice d/text line-start d/text s/x 0 rejoin [indent replace/all copy code newline rejoin [newline indent] newline]
+    ] [
+        splice d/text s/x 0 rejoin [code "  "]
+    ]
+]
+
+; A block for a state written without one, state ready: state ready [code]
+give-block: function [d [object!] n [object!] code [string!]] [
+    s: span-of d n/holder n/to
+    indent: indent-at d/text s/x
+    inner: rejoin [indent "    "]
+    splice d/text s/x + s/y 0 rejoin [
+        " [" newline inner replace/all copy code newline rejoin [newline inner] newline indent "]"
+    ]
+]
+
+; The new code goes in a node's block: after the value at an index of it, or first when there is none.
+into-node: function [d [object!] n [object!] k code [string!]] [
+    case [
+        none? n/block [give-block d n code]
+        k [after-value d n/block k code]
+        true [at-start d n/block code]
+    ]
+]
+
+add-state: function [
+    "The text with a new state inside a node (the machine or a state); kind is state, final or parallel"
+    d [object!] m [object!] parent [integer!] name [word!] kind [word!]
+] [
+    p: machine-node m parent
+    if any [p/kind = 'final  find state-names m name] [return none]
+    code: either kind = 'final [rejoin ["final " name]] [rejoin [kind " " name " []"]]
+    ; the first state of a level that is no parallel one is its initial
+    if all [empty? p/children  p/kind <> 'parallel] [code: rejoin ["initial " name newline code]]
+    last-child: either empty? p/children [none] [select machine-node m last p/children 'to]
+    into-node d p any [last-child  if p/initial-at [p/initial-at + 1]] code
+]
+
+; The ids each value of a path means, as the engine looks it up, or none when it means no state.
+path-ids: function [m [object!] scope [integer!] p [path!]] [
+    names: to block! p
+    while [scope] [
+        id: scope
+        ids: copy []
+        foreach w names [
+            unless id: state-child m id w [break]
+            append ids id
+        ]
+        if id [return ids]
+        scope: select machine-node m scope 'parent
+    ]
+    none
+]
+
+; Where a way names a state: for each [block index] of its targets that means the state, the change
+target-changes: function [d [object!] m [object!] w [object!] id [integer!] new [word!]] [
+    out: copy []
+    foreach [b k] w/targets [
+        v: pick b k
+        case [
+            word? :v [
+                if id = find-machine-state m w/level v [append out value-change d b k form new]
+            ]
+            path? :v [
+                if all [ids: path-ids m w/level v  find ids id] [
+                    p: copy v
+                    poke p index? find ids id new
+                    append out value-change d b k mold p
+                ]
+            ]
+        ]
+    ]
+    out
+]
+
+rename-state: function [
+    "The text with a state called anew, and every way and initial that names it changed too"
+    d [object!] m [object!] id [integer!] new [word!]
+] [
+    n: machine-node m id
+    if any [id = 1  find state-names m new  find machine-keywords new] [return none]
+    p: machine-node m n/parent
+    changes: value-change d n/holder n/from + 1 form new
+    if all [p/initial = n/name  p/initial-at] [append changes value-change d p/block p/initial-at + 1 form new]
+    foreach w m/ways [
+        if all [w/level = n/parent  w/source = n/name] [append changes value-change d w/block w/from + 1 form new]
+        append changes target-changes d m w id new
+    ]
+    path: machine-path m id
+    rename-places apply-changes d/text changes machine-key d m to path! path to path! append copy/part path (length? path) - 1 new
+]
+
+way-cuts: function ["The cuts that take out of a way what leads to or leaves a state, or the whole way" d [object!] m [object!] w [object!] id [integer!]] [
+    src: way-source m w
+    if all [src  inside-state? m src id] [return cut-change d w/block w/from w/to]
+    if w/kind = 'to [
+        t: first way-targets m w
+        return either all [t  inside-state? m t id] [cut-change d w/block w/from w/to] [copy []]
+    ]
+    out: copy []
+    kept: 0
+    foreach [from to k] w/choices [
+        t: find-machine-state m w/level pick w/branches k
+        either all [t  inside-state? m t id] [append out cut-change d w/branches from to] [kept: kept + 1]
+    ]
+    if all [kept = 0  not empty? out] [return cut-change d w/block w/from w/to]
+    out
+]
+
+delete-state: function [
+    "The text without a state, and without the ways that leave it or lead into it"
+    d [object!] m [object!] id [integer!]
+] [
+    if id = 1 [return none]
+    n: machine-node m id
+    p: machine-node m n/parent
+    changes: cut-change d n/holder n/from n/to
+    foreach w m/ways [
+        ; the ways written inside it go with it
+        unless inside-state? m w/level id [append changes way-cuts d m w id]
+    ]
+    if all [p/initial = n/name  p/initial-at] [
+        others: exclude copy p/children reduce [id]
+        append changes either empty? others [
+            cut-change d p/block p/initial-at p/initial-at + 1
+        ] [
+            value-change d p/block p/initial-at + 1 form select machine-node m first others 'name
+        ]
+    ]
+    drop-places apply-changes d/text changes machine-key d m to path! machine-path m id
+]
+
+set-initial: function [
+    "The text with a state as the one its level starts in"
+    d [object!] m [object!] id [integer!]
+] [
+    if id = 1 [return none]
+    n: machine-node m id
+    p: machine-node m n/parent
+    if p/kind = 'parallel [return none]
+    if p/initial-at [return apply-changes d/text value-change d p/block p/initial-at + 1 form n/name]
+    at-start d p/block rejoin ["initial " n/name]
+]
+
+; How a way written in a level names a state: the shortest name or path that the engine finds there.
+target-name: function [m [object!] level [integer!] id [integer!]] [
+    names: machine-path m id
+    k: length? names
+    while [k >= 1] [
+        p: copy skip names k - 1
+        t: either 1 = length? p [first p] [to path! p]
+        if id = find-machine-state m level t [return t]
+        k: k - 1
+    ]
+    none
+]
+
+add-way: function [
+    "The text with a new way from one state to another on an event (none for a way that waits for no event)"
+    d [object!] m [object!] from [integer!] to [integer!] event
+] [
+    if from = 1 [return none]
+    s: machine-node m from
+    level: machine-node m s/parent
+    if level/kind = 'parallel [return none]
+    unless t: target-name m level/id to [return none]
+    code: rejoin ["from " s/name " to " mold t]
+    if event [append code rejoin [" on " event]]
+    ; after the last way of its level, else after its last state
+    last-way: none
+    foreach w m/ways [if w/level = level/id [last-way: w]]
+    k: either last-way [last-way/to] [select machine-node m last level/children 'to]
+    into-node d level k code
+]
+
+delete-way: function ["The text without a way" d [object!] m [object!] w [object!]] [
+    apply-changes d/text cut-change d w/block w/from w/to
+]
+
+set-way-events: function [
+    "The text with the events a way is taken on: a block of words, empty for none"
+    d [object!] m [object!] w [object!] events [block!]
+] [
+    new: either 1 = length? events [form first events] [mold events]
+    case [
+        all [empty? events  w/events-at] [
+            ; where needs an event: it goes with them
+            stop: either w/where-at [w/where-at + 1] [w/events-at + 1]
+            apply-changes d/text cut-change d w/block w/events-at stop
+        ]
+        empty? events [d/text]
+        w/events-at [apply-changes d/text value-change d w/block w/events-at + 1 new]
+        true [
+            k: either w/kind = 'select [w/select-at] [w/from + 2]
+            if w/kind = 'to [k: w/target-at]
+            s: span-of d w/block k
+            splice d/text s/x + s/y 0 rejoin [" on " new]
+        ]
+    ]
+]
+
+set-way-target: function [
+    "The text with a way of the kind from a to b going to another state"
+    d [object!] m [object!] w [object!] to [integer!]
+] [
+    unless w/kind = 'to [return none]
+    unless t: target-name m w/level to [return none]
+    apply-changes d/text value-change d w/block w/target-at mold t
+]
+
+code-block: function [code [string!]] [rejoin ["[" trim copy code "]"]]
+
+way-code: function ["The code of a way's where or set, as written inside its block, or none" d [object!] w [object!] word [word!]] [
+    k: select reduce ['where w/where-at 'set w/set-at] word
+    unless k [return none]
+    s: span-of d w/block k + 1
+    copy/part at d/text s/x + 1 s/y - 2
+]
+
+set-way-code: function [
+    "The text with a way's where or set code: none or empty takes it out"
+    d [object!] m [object!] w [object!] word [word!] code
+] [
+    k: select reduce ['where w/where-at 'set w/set-at] word
+    empty: any [none? code  empty? trim copy code]
+    case [
+        all [k empty] [apply-changes d/text cut-change d w/block k k + 1]
+        empty [d/text]
+        k [apply-changes d/text value-change d w/block k + 1 code-block code]
+        word = 'where [
+            unless w/events-at [return none]
+            s: span-of d w/block w/events-at + 1
+            splice d/text s/x + s/y 0 rejoin [" where " code-block code]
+        ]
+        true [
+            s: span-of d w/block w/to
+            splice d/text s/x + s/y 0 rejoin [" set " code-block code]
+        ]
+    ]
+]
+
+state-word-value: function [
+    "What follows one of a node's own words as written (on-enter's code inside its block), or none"
+    d [object!] m [object!] id [integer!] word [word!]
+] [
+    n: machine-node m id
+    unless k: select n/words word [return none]
+    s: span-of d n/block k + 1
+    v: pick n/block k + 1
+    either block? :v [copy/part at d/text s/x + 1 s/y - 2] [copy/part at d/text s/x s/y]
+]
+
+set-state-word: function [
+    "The text with one of a node's own words (on-enter, run, timeout, no ...) set to a value as written, or taken out for none or empty"
+    d [object!] m [object!] id [integer!] word [word!] value
+] [
+    n: machine-node m id
+    k: select n/words word
+    if all [value  find [on-enter on-exit on-activity on-save run data] word] [value: code-block value]
+    empty: any [none? value  empty? trim copy value  value = "[]"]
+    case [
+        all [k empty] [apply-changes d/text cut-change d n/block k k + 1]
+        empty [d/text]
+        k [apply-changes d/text value-change d n/block k + 1 value]
+        true [
+            ; its own words go first in a state's block, after those it has already
+            last-word: none
+            foreach [w at] n/words [last-word: max any [last-word 0] at + 1]
+            into-node d n any [last-word  if n/initial-at [n/initial-at + 1]] rejoin [word " " value]
+        ]
+    ]
+]

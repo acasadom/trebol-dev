@@ -1,0 +1,170 @@
+Trebol [
+    title: "The designer's Try: a machine of the file run in the designer, its events sent with the mouse"
+]
+
+; Run by app.trb (do), after machines-view.trb, so it shares their words: ms, picked, text, machine-drawing.
+; Its buttons, data and history take the place of the properties while it runs.
+; Try makes the chosen machine from its block and shows it running: a button per event it names, usable when
+; a way out takes it now, the states it is in lit in the drawing, its data and what happened. Its timers run
+; as they would in the app; a button sends a timeout at once. The fields an event carries (count: 3) are typed
+; before its button is pressed. Any change to the code stops it.
+
+trying: none            ; the machine being tried, or none
+try-k: none             ; which of the file's machines it is
+try-text: none          ; the code it was made from
+try-last: ""            ; the state it was in when last shown
+try-sending: false      ; an event of the person's on its way: what it does is told by try-send
+try-lines: copy []      ; what happened, the newest first
+
+try-log: function [line [string!]] [
+    insert try-lines line
+    if 50 < length? try-lines [clear at try-lines 51]
+]
+
+state-text: function [m [object!]] [
+    s: m/state
+    either block? s [form collect [foreach p s [keep form p]]] [form s]
+]
+
+; the spec as the file writes it, but shared with no tab and saved nowhere
+try-spec: function [m [object!]] [
+    spec: engine-block ms m
+    words: select first m/nodes 'words
+    places: sort/reverse collect [foreach [w i] words [if find [shared on-save] w [keep i]]]
+    foreach i places [remove/part at spec i 2]
+    spec
+]
+
+try-machine: function ["Makes the chosen machine and starts it" ] [
+    k: either picked [picked/1] [1]
+    unless m: pick ms k [exit]
+    clear try-lines
+    r: try [machine try-spec m]
+    if error? r [
+        msg: r/message
+        if find/match msg "machine: " [msg: skip msg 9]
+        try-log rejoin ["It does not start: " msg]
+        toast first try-lines
+        set 'trying none
+        show-try
+        exit
+    ]
+    r/on-save: [try-changed]
+    r/saver: make object! [snapshot: none]
+    set 'trying r
+    set 'try-k k
+    set 'try-text text
+    set 'try-last state-text r
+    try-log rejoin ["Started in " try-last]
+    show-try
+]
+
+stop-try: function [why [string! none!]] [
+    if trying [attempt [machine-engine/stop trying]]
+    set 'trying none
+    clear try-lines
+    if why [try-log why  toast why]
+    show-try
+]
+
+; the machine moved by itself: a timer, a run that ended
+try-changed: function [] [
+    if any [not trying  try-sending] [exit]
+    now-in: state-text trying
+    if now-in <> try-last [
+        try-log rejoin ["By itself: " try-last " to " now-in]
+        set 'try-last now-in
+        try-ended
+    ]
+    show-try
+]
+
+try-ended: function [] [
+    if trying/done [try-log rejoin ["Ended" either trying/outcome [rejoin [": " trying/outcome]] [""]]]
+]
+
+try-send: function [event [word!]] [
+    unless trying [exit]
+    set 'try-sending true
+    fields: attempt [load/all any [try-fields/value ""]]
+    r: try [send trying either all [block? fields  not empty? fields] [append reduce [event] fields] [event]]
+    set 'try-sending false
+    either error? r [try-log rejoin [event ": " r/message]] [
+        now-in: state-text trying
+        try-log either now-in = try-last [rejoin [event ": stays in " now-in]] [rejoin [event ": " try-last " to " now-in]]
+        set 'try-last now-in
+        try-ended
+    ]
+    show-try
+]
+
+; a timer of the machine goes off now: a state's timeout, or the machine's ttl (key 0)
+try-time: function [key [integer!]] [
+    unless all [trying  x: select trying/timers key] [exit]
+    set 'try-sending true
+    machine-engine/drop second x
+    r: try [machine-engine/post trying either key = 0 ['expired] ['timeout] key first x]
+    set 'try-sending false
+    either error? r [try-log rejoin ["timeout: " r/message]] [
+        now-in: state-text trying
+        try-log rejoin [either key = 0 ["expired: "] ["timeout: "] try-last " to " now-in]
+        set 'try-last now-in
+        try-ended
+    ]
+    show-try
+]
+
+; the events a button is shown for: those its ways name, not the machine's own
+try-events: function [] [
+    own: machine-engine/own
+    collect [foreach e any [machine-engine/events trying []] [unless find own e [keep e]]]
+]
+
+try-active: function [] [
+    ; only in the drawing of the machine tried
+    unless all [trying  try-k = either picked [picked/1] [1]  m: pick ms try-k] [return copy []]
+    ; by path: the states of a fragment a state uses are the machine's own to the engine, and come
+    ; before the states written after that one, so the engine's ids are not the drawing's
+    out: copy []
+    foreach id trying/on [
+        path: copy []
+        while [id] [n: pick trying/nodes id  if n/parent [insert path n/name]  id: n/parent]
+        if x: drawn-state try-k m path [unless find out x [append out x]]
+    ]
+    out
+]
+
+show-try: function [] [
+    ; while it runs, the properties give their room to it
+    try-panel/hidden: not trying
+    either trying [machine-props/hidden: nothing-chosen/hidden: true] [fill-mprops]
+    if trying [
+        try-buttons/pane: layout/only collect [
+            foreach e try-events [
+                keep compose/deep [button small (form e) [try-send (to lit-word! e)]]
+                unless all [not trying/done  can? trying e] [keep 'disabled]
+            ]
+            foreach [key x] trying/timers [
+                if all [x  key >= 0] [
+                    name: either key = 0 ["Expire"] [rejoin ["Time out " select pick trying/nodes key 'name]]
+                    keep compose/deep [button small #clock (name) [try-time (key)]]
+                ]
+            ]
+        ]
+        ; a field a line
+        try-data/text: either trying/data [
+            t: copy ""
+            foreach [w v] body-of trying/data [
+                unless empty? t [append t newline]
+                append t rejoin [mold w " " mold :v]
+            ]
+            t
+        ] ["none"]
+    ]
+    ; the last few: the drawing keeps the room
+    try-history/pane: layout/only collect [foreach l copy/part try-lines 12 [keep compose [text small muted (l)]]]
+    ; set by path: a trying: in the block would make the word local to this function
+    p: make machine-drawing/props [active: try-active]
+    p/trying: to logic! trying
+    machine-drawing/props: p
+]

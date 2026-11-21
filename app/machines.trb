@@ -1,0 +1,249 @@
+Trebol [
+    title: "The machines of a file: their states and the ways between them, read from the text with where each sits"
+    exports: [
+        machines-of fragments-of fragment-named machine-node machine-root machine-children machine-path find-machine-state
+        state-names state-child machine-keywords way-targets way-source way-label inside-state? fresh-state-name
+    ]
+]
+
+; A file may make machines: machine [...]. Each is read from its loaded block as the engine reads it,
+; one level at a time, but without failing: what the designer needs is where every state and way is
+; written, so that an edit changes only those values. The text stays the truth; nothing is run.
+;
+; A machine is an object: name (the word it is set to, or none), block (its loaded block), nodes and ways.
+; A fragment (retry: fragment [blanks] [body]) is read as a machine of kind fragment, its block the body
+; and spec its blanks; a state that writes use retry [with [...]] knows the fragment it uses.
+; A node is a level: the machine itself (id 1, kind machine) or a state (kind state, final or parallel),
+; known by its place among the nodes, its parent by id, so nothing holds a loop of references.
+; A way is one from: its level (the node whose block it is written in), where it starts and ends in that
+; block, its source word, and the places of the states it goes to.
+
+machine-keywords: [data initial state final parallel from no on-enter on-exit on-activity on-save timeout ttl defer run invoke shared use]
+
+; words of one value after them: the index of the word is kept, its value is the next
+one-value: [data initial on-enter on-exit on-activity on-save timeout ttl defer run shared]
+
+new-node: function [m [object!] name kind [word!] parent] [
+    n: make object! [
+        id: name: kind: parent: block: holder: from: to: initial: initial-at: outcome: none
+        uses: use-at: with-at: none     ; use retry with [...]: the fragment's name, where use and with are
+        children: copy []
+        words: copy []      ; [word index ...]: where each of its own words sits in its block
+        strays: copy []     ; indexes of values that are no words of machine
+    ]
+    append m/nodes n
+    n/id: length? m/nodes
+    n/name: name  n/kind: kind  n/parent: parent
+    n
+]
+
+new-way: function [m [object!] n [object!] b [block!] i [integer!]] [
+    w: make object! [
+        id: level: block: from: to: source: kind: target-at: events: events-at: where-at: set-at: branches: branches-at: select-at: none
+        targets: copy []    ; [block index ...]: where each state it goes to is written
+        choices: copy []    ; [from to target-index ...] in the branches block: one per when, value or else
+    ]
+    append m/ways w
+    w/id: length? m/ways
+    w/level: n/id  w/block: b  w/from: i
+    w
+]
+
+read-way: function [m [object!] n [object!] b [block!] i [integer!]] [
+    w: new-way m n b i
+    w/source: pick b i + 1
+    j: i + 2
+    w/kind: pick b j
+    switch/default w/kind [
+        to [
+            w/target-at: j + 1
+            append w/targets reduce [b j + 1]
+            j: j + 2
+        ]
+        choose [j: j + 1]
+        select [w/select-at: j + 1  j: j + 2]
+    ] [
+        w/kind: none
+        w/to: i + 1
+        return i + 2
+    ]
+    if 'on = pick b j [
+        e: pick b j + 1
+        w/events: either block? :e [copy e] [reduce [e]]
+        w/events-at: j
+        j: j + 2
+    ]
+    if all [find [choose select] w/kind  block? pick b j] [
+        w/branches: pick b j
+        w/branches-at: j
+        read-branches w w/branches
+        j: j + 1
+    ]
+    if 'where = pick b j [w/where-at: j  j: j + 2]
+    if 'set = pick b j [w/set-at: j  j: j + 2]
+    w/to: j - 1
+    j
+]
+
+; when [...] to b [set [...]] | value to b [set [...]] | else to b [set [...]]
+read-branches: function [w [object!] bs [block!]] [
+    k: 1
+    while [k <= length? bs] [
+        start: k
+        k: either 'when = pick bs k [k + 2] [k + 1]
+        either 'to = pick bs k [
+            append w/targets reduce [bs k + 1]
+            t: k + 1
+            k: k + 2
+            if 'set = pick bs k [k: k + 2]
+            append w/choices reduce [start k - 1 t]
+        ] [k: start + 1]
+    ]
+]
+
+read-level: function [m [object!] n [object!] b [block!]] [
+    n/block: b
+    i: 1
+    while [i <= length? b] [
+        w: pick b i
+        case [
+            not word? :w [append n/strays i  i: i + 1]
+            find [state final parallel] w [
+                c: new-node m pick b i + 1 w n/id
+                append n/children c/id
+                c/holder: b  c/from: i
+                j: i + 2
+                if all [w = 'final  word? pick b j  not find machine-keywords pick b j] [c/outcome: j  j: j + 1]
+                if block? pick b j [read-level m c pick b j  j: j + 1]
+                c/to: j - 1
+                i: j
+            ]
+            w = 'from [i: read-way m n b i]
+            w = 'initial [n/initial: pick b i + 1  n/initial-at: i  i: i + 2]
+            find one-value w [append n/words reduce [w i]  i: i + 2]
+            w = 'no [append n/words reduce ['no i]  i: i + 2]
+            w = 'use [
+                append n/words reduce ['use i]
+                n/uses: pick b i + 1  n/use-at: i
+                i: i + 2
+                if 'with = pick b i [append n/words reduce ['use-with i]  n/with-at: i  i: i + 2]
+            ]
+            w = 'invoke [
+                append n/words reduce ['invoke i]
+                i: i + 2
+                if 'for = pick b i [append n/words reduce ['for i]  i: i + 4]
+                if 'with = pick b i [append n/words reduce ['with i]  i: i + 2]
+            ]
+            true [append n/strays i  i: i + 1]
+        ]
+    ]
+]
+
+read-machine: function [name b [block!] /fragment spec [block!]] [
+    m: make object! [name: block: spec: none  kind: 'machine  nodes: copy []  ways: copy []]
+    m/name: name  m/block: b
+    if fragment [m/kind: 'fragment  m/spec: spec]
+    root: new-node m any [name 'machine] 'machine none
+    read-level m root b
+    m
+]
+
+find-machines: function [code [block! paren!] out [block!] /local b s] [
+    name: none
+    parse code [any [
+        set name set-word! 'machine set b block! (append out read-machine to word! name b)
+        | set name set-word! 'fragment set s block! set b block! (append out read-machine/fragment to word! name b s)
+        | 'machine set b block! (append out read-machine none b)
+        | set b [block! | paren!] (find-machines b out)
+        | skip
+    ]]
+]
+
+machines-of: function [
+    "The machines and fragments a design's file makes, in the order they are written"
+    d [object!]
+] [
+    out: copy []
+    find-machines d/values out
+    out
+]
+
+fragments-of: function ["The fragments among machines read from a file" ms [block!]] [
+    collect [foreach m ms [if m/kind = 'fragment [keep m]]]
+]
+
+fragment-named: function ["The fragment of that name among machines read from a file, or none" ms [block!] name] [
+    foreach m ms [if all [m/kind = 'fragment  m/name = name] [return m]]
+    none
+]
+
+machine-node: function ["A node of a machine by its id" m [object!] id [integer!]] [pick m/nodes id]
+machine-root: function ["The machine itself, the level its top words are written in" m [object!]] [first m/nodes]
+
+machine-children: function ["The nodes inside a node, in the order they are written" m [object!] id [integer!]] [
+    collect [foreach c select pick m/nodes id 'children [keep pick m/nodes c]]
+]
+
+state-child: function [m [object!] id [integer!] name] [
+    foreach c select pick m/nodes id 'children [if name = select pick m/nodes c 'name [return c]]
+    none
+]
+
+find-machine-state: function [
+    "The id of the state a name or path means, looked up from a level and then from each level around it, as the engine does"
+    m [object!] scope [integer!] name
+] [
+    names: either path? :name [to block! name] [reduce [:name]]
+    while [scope] [
+        id: scope
+        foreach w names [unless id: state-child m id w [break]]
+        if id [return id]
+        scope: select pick m/nodes scope 'parent
+    ]
+    none
+]
+
+machine-path: function ["The names from the machine down to a state: [work waiting]" m [object!] id [integer!]] [
+    out: copy []
+    while [id <> 1] [
+        n: pick m/nodes id
+        insert out n/name
+        id: n/parent
+    ]
+    out
+]
+
+inside-state?: function ["Whether a node is a state or inside it" m [object!] id [integer!] state [integer!]] [
+    while [id] [
+        if id = state [return true]
+        id: select pick m/nodes id 'parent
+    ]
+    false
+]
+
+state-names: function ["Every state's name, at every level" m [object!]] [
+    collect [foreach n next m/nodes [keep n/name]]
+]
+
+fresh-state-name: function ["A name no state of the machine has: state-2 after state" m [object!] base [word!]] [
+    names: state-names m
+    unless find names base [return base]
+    k: 2
+    while [find names to word! rejoin [base "-" k]] [k: k + 1]
+    to word! rejoin [base "-" k]
+]
+
+way-source: function ["The id of the state a way leaves, or none when it names none here" m [object!] w [object!]] [
+    state-child m w/level w/source
+]
+
+way-targets: function ["The ids of the states a way can go to, none for those it names wrong" m [object!] w [object!]] [
+    collect [foreach [b k] w/targets [keep find-machine-state m w/level pick b k]]
+]
+
+way-label: function ["What a drawing writes on a way: its events, then where or choose" w [object!]] [
+    t: either w/events [form w/events] [copy ""]
+    if w/where-at [append t either empty? t ["[where]"] [" [where]"]]
+    if all [empty? t  w/kind = 'choose] [t: "choose"]
+    t
+]

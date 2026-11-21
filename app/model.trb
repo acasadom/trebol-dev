@@ -6,7 +6,7 @@ Trebol [
         set-face-text set-face-name face-label style-word toggle-flag
         layout-of head-end block-span indent-at after-line shown-faces
         pane-of own-block written-range values-at inside? set-screen screens-data add-screen piece? set-piece-label add-piece
-        set-face-label set-face-global
+        set-face-label set-face-global more-on-line? blank? line-start
     ]
 ]
 

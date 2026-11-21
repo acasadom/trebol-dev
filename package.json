@@ -1,6 +1,6 @@
 {
   "name": "trebol-dev",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "The visual designer for Trebol: lays out screens with Trebol's faces and writes the Trebol code back, keeping yours as you wrote it.",
   "license": "Apache-2.0",
   "type": "module",
@@ -34,10 +34,11 @@
   "scripts": {
     "test": "node --test && trebol test app",
     "start": "node bin/trebol-dev.js",
-    "build:editor": "esbuild editor/trebol-code.js --bundle --minify --format=esm --target=es2022 --legal-comments=eof --outfile=app/trebol-code.js"
+    "build:editor": "esbuild editor/trebol-code.js --bundle --minify --format=esm --target=es2022 --legal-comments=eof --outfile=app/trebol-code.js",
+    "build:graph": "esbuild editor/machine-graph.js --bundle --minify --format=esm --target=es2022 --legal-comments=eof --outfile=app/machine-graph.js && { printf '/*! elkjs 0.12.1, https://github.com/kieler/elkjs, EPL-2.0 OR GPL-3.0-or-later */\\n'; cat node_modules/elkjs/lib/elk-worker.min.js; } > app/elk-worker.js"
   },
   "dependencies": {
-    "trebol": "^0.3.1"
+    "trebol": "^0.4.0"
   },
   "devDependencies": {
     "@codemirror/commands": "^6.11.1",
@@ -46,6 +47,7 @@
     "@codemirror/state": "^6.7.6",
     "@codemirror/view": "^6.43.15",
     "@lezer/highlight": "^1.2.5",
+    "elkjs": "^0.12.1",
     "esbuild": "^0.28.2"
   }
 }

@@ -1,0 +1,360 @@
+Trebol [title: "The designer's machines: screen tests"  app: %app.trb]
+
+disk: #(
+    "repair.trb" {Trebol [title: "Repairs"]
+
+repair: machine [
+    initial received
+    state received []
+    state work [
+        initial checking
+        state checking []
+        state fixing []
+        from checking to fixing on fixable
+    ]
+    final ready
+    from received to work on start
+    from work to ready on fixed
+]
+}
+    "booking.trb" {Trebol [title: "Bookings"]
+
+booking: machine [
+    data [paid: 0]
+    shared bikes
+    initial held
+    state held [timeout 0:15]
+    state paid []
+    final released
+    from held to paid on pay set [paid: data/paid + event/amount]
+    from held to released on timeout
+]
+}
+    "app.trb" {Trebol [title: "Signup"]
+
+view [heading "Join us"]
+}
+)
+written: none
+
+serve [
+    GET "/api/files" [#(name: "shop" files: ["app.trb" "booking.trb" "repair.trb"])]
+    GET "/api/file" [select disk query/path]
+    PUT "/api/file" [written: body  "Saved."]
+]
+
+machines: does [choose "File" "repair.trb"  choose "Edit" "Machines"]
+
+"the structure of a machine"
+[
+    machines
+    see "repair: machine"
+    see "state received (initial)"
+    see "final ready"
+    see "to work on start"
+    see "to fixing on fixable"
+    see/not {heading "Join us"}
+    machine-props/hidden
+]
+[
+    ; back to the screens
+    machines
+    choose "Edit" "Screens"
+    choose "File" "app.trb"
+    see {heading "Join us"}
+    machine-side/hidden
+]
+
+"a state's properties"
+[
+    machines
+    click "state received (initial)"
+    type "name" "arrived"
+    click "Save"
+    to logic! all [
+        find written "initial arrived"
+        find written "state arrived []"
+        find written "from arrived to work on start"
+        not find written "received"
+    ]
+]
+[
+    machines
+    click "state fixing"
+    click "initial: its level starts here"
+    click "Save"
+    to logic! find written "initial fixing^/        state checking"
+]
+[
+    machines
+    click "state checking (initial)"
+    type "timeout" "0:15"
+    click "Save"
+    to logic! find written "state checking [^/            timeout 0:15^/        ]"
+]
+
+"adding and deleting"
+[
+    machines
+    canvas-add ["state" "m1.1"]
+    see "state state"
+    click "Save"
+    to logic! find written "final ready^/    state state []^/"
+]
+[
+    machines
+    canvas-add ["final" "s1.3"]
+    see "final done"
+    click "Save"
+    to logic! find written "state fixing []^/        final done^/"
+]
+[
+    machines
+    click "state received (initial)"
+    pick-menu "Add a way" "ready"
+    see "to ready on go"
+    click "Save"
+    to logic! find written "from work to ready on fixed^/    from received to ready on go^/"
+]
+[
+    machines
+    click "state fixing"
+    click "Delete"
+    see/not "state fixing"
+    click "Save"
+    to logic! all [not find written "fixing"  find written "state checking []^/    ]"]
+]
+[
+    ; a file with none gets one
+    choose "File" "app.trb"
+    choose "Edit" "Machines"
+    see "This file makes no machines yet. Its states and ways are made on the drawing."
+    click "New machine"
+    see "machine-1: machine"
+    see "state start (initial)"
+    click "Save"
+    to logic! find written {view [heading "Join us"]^/^/machine-1: machine [^/    initial start^/    state start []^/]^/}
+]
+[
+    machines
+    click "repair: machine"
+    click "Delete"
+    see/not "repair: machine"
+    click "Undo"
+    see "repair: machine"
+]
+
+"a way's properties"
+[
+    machines
+    click "to work on start"
+    type "on" "[begin go]"
+    see "to work on begin go"
+    click "Save"
+    to logic! find written "from received to work on [begin go]"
+]
+[
+    machines
+    click "to work on start"
+    choose "to" "ready"
+    see "to ready on start"
+    click "Save"
+    to logic! find written "from received to ready on start"
+]
+[
+    machines
+    click "to ready on fixed"
+    click "Delete"
+    see/not "to ready on fixed"
+    click "Save"
+    not find written "fixed"
+]
+
+"the code marks what is chosen"
+[
+    machines
+    click "state work"
+    s: code-view/props/mark
+    all [block? s  "state work [" = copy/part at text s/1 12]
+]
+
+"the drawing"
+[
+    ; it is given the chosen machine: its states, nested, the initial ones, and its ways labelled
+    machines
+    g: machine-drawing/props/graph
+    ids: collect [foreach n g/nodes [keep n/id]]
+    work: none
+    foreach n g/nodes [if n/name = "checking" [work: n]]
+    way: none
+    foreach w g/ways [if w/label = "fixable" [way: w]]
+    to logic! all [
+        g/name = "repair"
+        ids = ["m1.1" "s1.2" "s1.3" "s1.4" "s1.5" "s1.6"]
+        work/parent = "s1.3"
+        work/initial
+        way/from = "s1.4"
+        way/to = ["s1.5"]
+    ]
+]
+[
+    ; a click on a state in the drawing chooses it, as the structure does
+    machines
+    pick-machine "s1.3"
+    all [
+        machine-drawing/props/selected = "s1.3"
+        not machine-props/hidden
+        to logic! find form machine-tree/selected/name "state work"
+    ]
+]
+[
+    ; a drag from a state onto another: a new way, chosen
+    machines
+    machine-connect ["s1.2" "s1.6"]
+    see "to ready on go"
+    click "Save"
+    all [
+        to logic! find written "from received to ready on go"
+        picked/3 = 'way
+        machine-drawing/props/selected = rejoin ["w1." picked/2]
+    ]
+]
+[
+    ; states of two machines: no way between them
+    machines
+    machine-connect ["s1.2" "s2.2"]
+    see/not "on go"
+]
+
+"trying a machine"
+[
+    ; a button per event; those no way out takes now cannot be used
+    machines
+    try-machine
+    fixed: none
+    foreach f try-buttons/pane [if f/text = "fixed" [fixed: f]]
+    all [
+        machine-drawing/props/trying
+        fixed/disabled
+        machine-drawing/props/active = ["s1.2"]
+        to logic! find first try-lines "Started in received"
+    ]
+]
+[
+    ; an event moves it: the states it is in are lit, and what happened is told
+    machines
+    try-machine
+    click "start"
+    all [
+        machine-drawing/props/active = ["s1.3" "s1.4"]
+        "start: received to work/checking" = first try-lines
+    ]
+]
+[
+    ; a change to the code stops it
+    machines
+    try-machine
+    click "state received (initial)"
+    write-text head replace copy text "state received" "state arrived"
+    all [
+        none? trying
+        not machine-drawing/props/trying
+        try-panel/hidden
+        not machine-props/hidden
+        machine-drawing/props/active = []
+        "The code changed: try it again." = first try-lines
+    ]
+]
+[
+    ; a timeout at once; the data it changes; shared with no tab while tried
+    choose "File" "booking.trb"
+    choose "Edit" "Machines"
+    try-machine
+    see "Time out held"
+    click "Time out held"
+    all [
+        ["Ended" "timeout: held to released"] = copy/part try-lines 2
+        none? trying/channel
+    ]
+]
+[
+    choose "File" "booking.trb"
+    choose "Edit" "Machines"
+    try-machine
+    ; the fields the event carries
+    type "Event fields" "amount: 5"
+    click "pay"
+    all [
+        try-data/text = "paid: 5"
+        ; paid has no way out: the machine ends there
+        ["Ended" "pay: held to paid"] = copy/part try-lines 2
+    ]
+]
+[
+    ; a timer that goes off by itself
+    choose "File" "booking.trb"
+    choose "Edit" "Machines"
+    write-text head replace copy text "timeout 0:15" "timeout 0.1"
+    try-machine
+    wait 0.3
+    all [
+        none? find try-buttons/pane/1/text "Time out"
+        ["Ended" "By itself: held to released"] = copy/part try-lines 2
+    ]
+]
+
+"the problems of a machine"
+[
+    machines
+    write-text head replace copy text "from work to ready on fixed" "from work to readdy on fixed"
+    all [
+        not machine-problems/hidden
+        to logic! find machine-problems/data/1/message "repair: no state readdy"
+        problem-count/text = "1 problem"
+    ]
+]
+[
+    machines
+    write-text head replace copy text "state received []" "state received [timeout 5]"
+    all [
+        to logic! find machine-problems/data/1/message "received has a timeout"
+        machine-problems/data/1/at = "5:5"
+    ]
+]
+[
+    machines
+    machine-problems/hidden
+]
+
+"a machine's name"
+[
+    machines
+    click "repair: machine"
+    type "name" "fix"
+    see "fix: machine"
+    click "Save"
+    to logic! find written "fix: machine ["
+]
+[
+    machines
+    write-text head replace copy text "repair: machine" "machine"
+    click "machine"
+    type "name" "mend"
+    click "Save"
+    to logic! find written "^/mend: machine ["
+]
+[
+    ; a machine that does not start says why
+    machines
+    write-text head replace copy text "from work to ready on fixed" "from work to raedy on fixed"
+    try-machine
+    all [
+        none? trying
+        try-panel/hidden
+        to logic! find first try-lines "It does not start: no state raedy"
+    ]
+]
+
+"the title of the properties"
+[(title-lines "from received to quote on start") = "from received to quote on^/start"]
+[(title-lines "state paid") = "state paid"]

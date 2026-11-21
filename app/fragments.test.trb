@@ -1,0 +1,97 @@
+Trebol [
+    title: "Fragments in the designer: reading them and the states that use them, and their edits"
+    app: none
+]
+
+import %model.trb
+import %machines.trb
+import %machine-edits.trb
+import %fragments.trb
+
+code: rejoin [{retry: fragment [work [block!] check [block!]] [
+    initial attempt
+    state attempt [on-enter work]
+    state done []
+    from attempt to done on ok
+]
+order: machine [
+    initial charging
+    state charging [use retry with [work: [charge]  check: [true]]]
+    state packing []
+    final paid
+    from charging to paid on ok
+    from charging to packing on hold
+    from packing to paid on ok
+]
+}]
+ms: machines-of design-of code
+charging: machine-node second ms 2
+
+"reading"
+[2 = length? ms]
+['fragment = select first ms 'kind]
+['machine = select second ms 'kind]
+['retry = select first ms 'name]
+[[work [block!] check [block!]] = select first ms 'spec]
+[[attempt done] = collect [foreach n next select first ms 'nodes [keep n/name]]]
+['attempt = select machine-root first ms 'initial]
+['retry = select charging 'uses]
+[none? select machine-node second ms 3 'uses]
+[1 = length? fragments-of ms]
+['retry = select fragment-named ms 'retry 'name]
+[none? fragment-named ms 'order]
+[[retry: fragment [] [initial a state a []]] = load {retry: fragment [] [initial a state a []]}]
+[1 = length? machines-of design-of {view [button [f: fragment [x] [initial a state a []]]]}]
+[n: machine-node first machines-of design-of {m: machine [initial a state a [use f]]} 2  all [n/uses = 'f  none? n/with-at]]
+[(uses-of ms 'retry) = reduce [second ms charging]]
+
+"making them as the engine does"
+[error? try [machine-engine/make-machine copy/deep select second ms 'block]]
+[object? machine-engine/make-machine engine-block ms second ms]
+[m: machine-engine/make-machine engine-block ms second ms  to logic! find collect [foreach n m/nodes [keep n/name]] 'attempt]
+[none? fragment-problem first ms]
+[
+    ; only the fragments written before a machine are made for it, as when the file runs
+    d2: design-of {m: machine [initial a state a [use f]]
+f: fragment [] [initial x state x []]}
+    ms2: machines-of d2
+    all [error? try [machine-engine/make-machine engine-block ms2 first ms2]  block? late-use-problem d2 ms2 first ms2]
+]
+[d: design-of code  ms: machines-of d  none? late-use-problem d ms second ms]
+[
+    ; a new fragment goes before the first machine, with the words set before it
+    d2: design-of {Trebol []^/x: 1^/a: b: machine [initial s state s []]^/}
+    t: fragment-before-machines d2 machines-of d2 {f: fragment [] []^/}
+    t = {Trebol []^/x: 1^/f: fragment [] []^/^/a: b: machine [initial s state s []]^/}
+]
+[d2: design-of {x: 1}  (fragment-before-machines d2 machines-of d2 "f") = "x: 1^/^/f"]
+[error? fragment-problem first machines-of design-of {f: fragment [1] [initial a state a []]}]
+[
+    ; a fragment may use another, by the file's names
+    ms2: machines-of design-of {inner: fragment [] [initial x state x []]
+outer: fragment [] [initial y state y [use inner]]
+m: machine [initial a state a [use outer]]}
+    object? machine-engine/make-machine engine-block ms2 third ms2
+]
+
+"a state's use"
+[d: design-of code  ms: machines-of d  to logic! find set-use d second ms 3 'retry "state packing [^/        use retry^/    ]"]
+[d: design-of code  ms: machines-of d  t: set-use d second ms 2 'other  to logic! find t "use other with [work:"]
+[d: design-of code  ms: machines-of d  t: set-use d second ms 2 none  to logic! find t "state charging []"]
+[d: design-of code  ms: machines-of d  "work: [charge]  check: [true]" = use-with-value d second ms 2]
+[d: design-of code  ms: machines-of d  none? use-with-value d second ms 3]
+[d: design-of code  ms: machines-of d  to logic! find set-use-with d second ms 2 "work: [pay]" "use retry with [work: [pay]]"]
+[d: design-of code  ms: machines-of d  to logic! find set-use-with d second ms 2 "" "state charging [use retry]"]
+[d: design-of {m: machine [initial a state a [use f]]}  m: first machines-of d  to logic! find set-use-with d m 2 "x: 1" "use f with [x: 1]"]
+[d: design-of code  ms: machines-of d  none? set-use-with d second ms 3 "x: 1"]
+
+"the head of a fragment"
+[d: design-of code  ms: machines-of d  t: rename-machine d ms first ms 'again  all [find t "again: fragment ["  find t "use again with"  not find t "retry"]]
+[d: design-of code  ms: machines-of d  none? rename-machine d ms first ms 'order]
+[d: design-of code  ms: machines-of d  to logic! find rename-machine d ms second ms 'buy "buy: machine ["]
+[d: design-of code  ms: machines-of d  t: delete-machine-text d first ms  to logic! all [not find t "fragment"  find/match t "order: machine ["]]
+[d: design-of {machine [initial a state a []]}  "x: machine [initial a state a []]" = rename-machine d machines-of d first machines-of d 'x]
+[d: design-of code  ms: machines-of d  "work [block!] check [block!]" = fragment-spec-value d first ms]
+[d: design-of code  ms: machines-of d  to logic! find set-fragment-spec d first ms "work [block!]" "retry: fragment [work [block!]] ["]
+[to logic! find/match new-fragment-code ms "fragment-1: fragment [] [^/    initial start"]
+[to logic! find/match new-fragment-code machines-of design-of {fragment-1: fragment [] [initial a state a []]} "fragment-2:"]

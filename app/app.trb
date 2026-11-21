@@ -16,7 +16,13 @@ import %props.trb
 import %samples.trb
 import %history.trb
 import %move.trb
+import %machines.trb
+import %machine-edits.trb
+import %machine-moves.trb
+import %machine-places.trb
+import %fragments.trb
 import %trebol-code.js
+import %machine-graph.js
 
 files: copy []
 path: none          ; the file being designed, from the project's folder
@@ -116,7 +122,8 @@ write-text: function [t [string!]] [
     change-text t
 ]
 
-edit: function [t [string! none!]] [if t [write-text t]]
+; the places of the machines' states stay last in the file, whatever an edit wrote after them
+edit: function [t [string! none!]] [if t [write-text places-last t]]
 
 undo-change: function [] [if all [hist  t: undo-text hist text] [change-text t]]
 redo-change: function [] [if all [hist  t: redo-text hist text] [change-text t]]
@@ -202,6 +209,7 @@ redraw: function [] [
         problems/hidden: true
         props/hidden: true
         nothing-chosen/hidden: false
+        redraw-machines
         exit
     ]
     fs: shown-faces d
@@ -222,9 +230,11 @@ redraw: function [] [
         rejoin [length? problems/data either 1 = length? problems/data [" problem"] [" problems"]]
     ]
     show-props
+    redraw-machines
 ]
 
 show-props: function [] [
+    if editing = "Machines" [props/hidden: true  exit]
     f: the-face
     props/hidden: not f
     nothing-chosen/hidden: to logic! f
@@ -255,130 +265,8 @@ fill-props: function [] [
     ]
 ]
 
-; what a control of the properties did: the k-th option (a group of entries), or 0 for the
-; texts, what it follows and handlers
-prop-act: function [k [integer!] what [word!] value] [
-    g: either k > 0 [pick prop-entries k] [none]
-    if what = 'check [return either g [prop-check g value] [true]]
-    unless f: the-face [exit]
-    e: all [g  first g]
-    ; typing goes on in the control: the panel is laid out again only for a choice or a removal
-    if find [values code text hint is calc react event action label screen-name screen-title screen-args piece-label] what [set 'keep-props true]
-    ; a picked icon shows in the panel: laid out again
-    t: switch what [
-        flag [either value [set-option d f e none] [remove-option d f e]]
-        choice [set-option d f e reduce [to word! value]]
-        icon [prop-values f g mold to issue! form value]
-        custom [either value/2 [set-option/rule d f e none value/1] [remove-option/rule d f e value/1]]
-        values [prop-values f g value]
-        code [
-            either empty? trim copy value [remove-option d f e] [
-                b: attempt [load value]
-                either block? b [set-option d f e reduce [b]] [none]
-            ]
-        ]
-        remove [
-            either e/how = 'custom [
-                ; every rule of a program the face has goes
-                foreach w custom-rule-words [
-                    if option-of/rule face-parts d f e w [write-text remove-option/rule d f e w  f: the-face]
-                ]
-                none
-            ] [
-                q: group-part face-parts d f g
-                either q [remove-option d f q/2] [none]
-            ]
-        ]
-        text [set-face-text d f value]
-        hint [set-hint d f value]
-        is calc react [
-            b: attempt [load value]
-            set-reaction d f what either all [block? b  not empty? b] [b] [none]
-        ]
-        label [
-            w: all [string? value  not empty? trim copy value  attempt [load value]]
-            case [
-                none? w [set-face-label d f none]
-                word? w [set-face-label d f w]
-                true [none]
-            ]
-        ]
-        global [set-face-global d f value]
-        screen-name [w: attempt [load value]  either word? w [set-screen d f 'name w] [none]]
-        screen-title [set-screen d f 'title value]
-        screen-args [
-            w: attempt [load/all value]
-            either all [block? w  parse w [any word!]] [set-screen d f 'args w] [none]
-        ]
-        add-screen [add-screen d f]
-        piece-label [set-piece-label d f value]
-        add-piece [add-piece d f value]
-        action [
-            b: all [string? value  not empty? trim copy value  attempt [load value]]
-            set-action d f either all [block? b  not empty? b] [b] [none]
-        ]
-        event [
-            b: all [string? value/2  not empty? trim copy value/2  attempt [load value/2]]
-            either block? b [set-event d f value/1 b] [remove-event d f value/1]
-        ]
-    ]
-    either t [edit t] [set 'keep-props false]
-]
-
-; what is typed for an option, as the values of the entry of its group that takes them, or none
-typed-as: function [g [block!] value [string!]] [
-    vals: attempt [load/all value]
-    unless block? vals [return none]
-    foreach e g [
-        case [
-            find [name label] e/how [if all [1 = length? vals  word? first vals] [return reduce [e vals]]]
-            ; a block is typed as it is shown: [1 2 1]
-            e/how = 'block [if all [1 = length? vals  block? first vals] [return reduce [e vals]]]
-            true [
-                vs: vals
-                ; a text is typed as it is shown, with or without its quotes
-                if all [find e/args 'text  not string? first vals] [vs: reduce [value]]
-                if all [(length? vs) = length? e/args  args-take? e/args vs] [return reduce [e vs]]
-            ]
-        ]
-    ]
-    none
-]
-
-args-take?: function [args [block!] vals [block!]] [
-    repeat i length? args [
-        a: pick args i  v: pick vals i
-        ok: case [
-            a = 'text [any [string? :v  map? :v  lit-word? :v]]
-            'one-of = first a [all [word? :v  to logic! find either word? a/2 [get a/2] [a/2] v]]
-            true [
-                rule: copy []
-                foreach t a [unless empty? rule [append rule '|]  append rule t]
-                parse reduce [:v] rule
-            ]
-        ]
-        unless ok [return false]
-    ]
-    true
-]
-
-prop-check: function [g [block!] value] [
-    if any [not string? value  empty? trim copy value  typed-as g value] [return true]
-    m: copy ""
-    foreach e g [unless empty? m [append m " or "]  append m type-of-args e]
-    rejoin ["it takes " m]
-]
-
-; values typed for an option: written when they are what it takes, taken out when emptied
-prop-values: function [f g [block!] value [string!]] [
-    q: group-part face-parts d f g
-    if empty? trim copy value [return either q [remove-option d f q/2] [none]]
-    unless t: typed-as g value [return none]
-    e: t/1  vals: t/2
-    if e/how = 'name [return set-face-name d f first vals]
-    ; written in another of its ways: in place of it
-    either all [q  not same? q/2 e] [set-option/over d f e vals q/1] [set-option d f e vals]
-]
+; what the controls of the properties do (shares these words)
+do %props-act.trb
 
 ; the loaded block that holds a box's faces
 ; a screens face shows one screen: the one the chosen face is on, or its first; tabs and steps
@@ -425,6 +313,7 @@ pick-face: function [f [object!]] [
 ; the cursor put in the code: the innermost face written around it
 caret-at: function [at [integer!]] [
     unless d [exit]
+    if editing = "Machines" [machine-caret at  exit]
     best: none
     n: 0
     foreach f shown-faces d [
@@ -438,7 +327,8 @@ caret-at: function [at [integer!]] [
 
 ; Design, Split or Code: what the middle shows
 show-mode: function [m] [
-    preview-pane/hidden: m = "Code"
+    preview-pane/hidden: any [m = "Code"  editing = "Machines"]
+    machine-pane/hidden: any [m = "Code"  editing <> "Machines"]
     code-pane/hidden: m = "Design"
     centre/cols: either m = "Split" [[1 1]] [[1]]
 ]
@@ -503,6 +393,12 @@ add-face: function [item [word!]] [
     if all [at  not problem  pick shown-faces d at] [choose-face at]
 ]
 
+; the machines of the file: their structure, properties and code (shares these words)
+do %machines-view.trb
+do %fragments-view.trb
+do %machine-try.trb
+do %machine-canvas.trb
+
 ; the Add menu comes from the palette
 view compose/deep/only [
     width fill
@@ -512,6 +408,7 @@ view compose/deep/only [
             title "Trebol designer"
             global project-name: text muted ""
             global file-choice: choice "File" [] on-change [if value [open-file value]]
+            global editing-f: radio "Edit" ["Screens" "Machines"] segmented on-change [show-editing value]
         ]
         global mode-f: radio mode "View" ["Design" "Split" "Code"] segmented on-change [show-mode value]
         row middle [
@@ -528,6 +425,14 @@ view compose/deep/only [
             global structure: tree [name] reorder drop on-select [choose-face row/id]
                 on-reorder [reorder event/parent event/from event/to]
                 on-drop [drop-face event/dropped event/parent event/index]
+            global machine-side: column hidden [
+                row [
+                    button #plus "New machine" small [machine-add 'machine]
+                    button #plus "New fragment" small [machine-add 'fragment]
+                ]
+                global machine-none: text muted "This file makes no machines yet. Its states and ways are made on the drawing."
+                global machine-tree: tree [name] on-select [pick-machine row/id]
+            ]
         ]
         global centre: grid fit [1 1] [
             global preview-pane: panel "Preview" [
@@ -539,6 +444,15 @@ view compose/deep/only [
                 ]
                 global problems: table [at "Where" message "Problem"] hidden
             ]
+            global machine-pane: panel "Drawing" hidden [
+                global machine-drawing: widget <tb-machine-graph> fit [graph: none selected: none editing: none trying: false]
+                    on-pick [pick-machine event/detail] on-add [canvas-add event/detail] on-connect [canvas-connect event/detail]
+                    on-grow [canvas-grow event/detail] on-rename [canvas-rename event/detail] on-remove [canvas-remove event/detail]
+                    on-initial [canvas-initial event/detail] on-move [canvas-move event/detail] on-place [canvas-placed event/detail]
+                    on-undo [undo-change] on-redo [redo-change] on-try [try-machine] on-restart [try-machine] on-stop [stop-try none]
+                    on-open [toggle-open event/detail] on-fragment [open-fragment event/detail]
+                global machine-problems: table [at "Where" message "Problem"] hidden
+            ]
             global code-pane: panel "Code" pad 2 [
                 global problem-text: text danger hidden ""
                 global code-view: widget <trebol-code> fit [words: code-words mark: none] on-change [write-text value]
@@ -547,6 +461,15 @@ view compose/deep/only [
         ]
         panel "Properties" pad 4 [
             global nothing-chosen: text muted "Choose a face in the structure, the preview or the code."
+            global machine-props: column hidden []
+            global try-panel: column hidden [
+                text small muted "Send it an event: the buttons of those no way out takes now cannot be used."
+                global try-buttons: row []
+                global try-fields: field "Event fields" "the fields the next event carries: count: 3"
+                text small muted "Data"
+                global try-data: code ""
+                global try-history: column []
+            ]
             global props: column hidden [
                 global face-kind: code ""
                 global face-chain: text small muted ""
@@ -566,5 +489,6 @@ view compose/deep/only [
 
 mode-f/value: "Split"
 props-tab/value: "Options"
+editing-f/value: "Screens"
 device-f/value: "Desktop"
 read-files

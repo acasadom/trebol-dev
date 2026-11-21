@@ -43,6 +43,57 @@ const tabs = `        booking "Booking" [id] [
 `;
 const note = `    note "Bicycle repairs, done right."\n`;
 
+// the repair machine of the tutorial, with its places as the designer keeps them at the end of the file
+const layout = (...lines) => `\n; layout [\n${lines.map(l => `;     ${l}\n`).join('')}; ]\n`;
+const states = `    state work [
+        initial checking
+        state checking []
+        state waiting []
+        state fixing []
+`;
+const ways = `        from checking to waiting on need-parts set [parts: event/count]
+        from checking to fixing on fixable
+        from waiting to fixing on arrived
+`;
+const viewEnd = `\nview [\n    title "Cog & Chain"\n]\n`;
+const repair = (outer, inner = ways) => `repair: machine [
+    data [bike: none  parts: 0]
+    initial received
+    state received []
+${states}${inner}    ]
+    final ready
+${outer}]
+` + viewEnd + layout('repair [',
+  '    received 40x110  work 220x40  work/checking 40x60  work/waiting 260x60  work/fixing 150x180  ready 740x110', ']');
+const M = head + repair(`    from received to work on start set [bike: event/bike]
+    from work to ready on fixed
+`);
+// the same machine asking the customer to agree to the price first, with a fragment made before it
+const F = head + `approval: fragment [ask [block!]] [
+    initial asked
+    state asked [on-enter ask  timeout 24:00]
+    state agreed []
+    from asked to asked on timeout
+    from asked to agreed on yes
+]
+
+repair: machine [
+    data [bike: none  parts: 0]
+    initial received
+    state received []
+    state quote [use approval with [ask: [toast "Price sent"]]]
+${states}${ways}    ]
+    final ready
+    from received to quote on start set [bike: event/bike]
+    from quote to work
+    from work to ready on fixed
+]
+` + viewEnd + layout('repair [',
+  '    received 30x110  quote 170x70  work 380x40  work/checking 40x60  work/waiting 260x60  work/fixing 150x180  ready 790x110',
+  ']', 'approval [asked 40x50  agreed 40x170]');
+const machines = ['click', 'Machines'];
+const design = ['click', 'Design'];
+
 const shots = {
   window: [A, []],
   'add-menu': [A, [['tree', 'view'], ['click', 'Add'], ['click', 'Layout']]],
@@ -58,6 +109,17 @@ const shots = {
   'tabs-rows': [head + screens(tabs), [['tree', 'rows parts']]],
   'own-style': [head + style + screens(tabs), [['tree', 'title'], ['click', 'Add'], ['click', 'This file']]],
   'does-not-load': [head + style + screens(tabs, note).replace('            form [\n', '            form \n'), []],
+  'machines-none': [A, [machines]],
+  'machine-added': [A, [machines, ['click', 'New machine']]],
+  'machine-states': [head + repair('', ''), [machines, design, ['tree', 'state work']]],
+  'machine-drag': [head + repair(''), [machines, design, ['dot', 'received', 'work']]],
+  'machine-way': [M, [machines, design, ['tree', 'to waiting on need-parts']]],
+  'machine-places': [M, [machines, design, ['carry', 'ready', 0.53, 0.33]]],
+  'machine-try': [M, [machines, design, ['click', 'Try'], ['type', 'Event fields', 'bike: "Ada\'s road bike"  count: 3'], ['click', 'start'], ['click', 'need-parts']]],
+  'machine-fragment': [F, [machines, design, ['tree', 'approval: fragment']]],
+  'machine-use': [F, [machines, design, ['tree', 'state quote'], ['click', 'Open']]],
+  'machine-use-try': [F, [machines, design, ['tree', 'state quote'], ['click', 'Open'], ['click', 'Try'], ['type', 'Event fields', 'bike: "Ada\'s road bike"'], ['click', 'start']]],
+  'machine-problem': [M.replace('from work to ready on fixed', 'from work to raedy on fixed'), [machines, design]],
   problems: [head + style + screens(tabs, note).replace('field customer "Customer" required', 'field customer "Customer" requird'), []],
 };
 
@@ -83,12 +145,14 @@ async function take(name, [text, steps]) {
     ?? [...document.querySelectorAll(${JSON.stringify(sel)})].find(e => e.offsetParent !== null && e.textContent.trim().startsWith(T));
     if (!e) return null; e.scrollIntoView({ block: 'nearest' }); const r = e.getBoundingClientRect(); return [r.x + r.width / 2, r.y + r.height / 2] })()`;
   const at = async (sel, t) => {
-    const p = await evaluate(`(T => ${find(sel)})(${JSON.stringify(t)})`);
+    let p = await evaluate(`(T => ${find(sel)})(${JSON.stringify(t)})`);
+    if (!p && sel.startsWith('button')) p = await evaluate(`(T => { const e = [...(document.querySelector('tb-machine-graph')?.shadowRoot?.querySelectorAll('button') ?? [])]
+      .find(b => b.getClientRects().length && b.textContent.trim() === T); if (!e) return null; const r = e.getBoundingClientRect(); return [r.x + r.width / 2, r.y + r.height / 2] })(${JSON.stringify(t)})`);
     if (!p) throw new Error(`${name}: no ${t}`);
     return p;
   };
   const mouse = async (type, [x, y]) => send('Input.dispatchMouseEvent', { type, x, y, button: 'left', clickCount: 1 });
-  for (const [op, a, b] of steps) {
+  for (const [op, a, b, c] of steps) {
     if (op === 'tree') { const p = await at('.tb-tree-label', a); await mouse('mousePressed', p); await mouse('mouseReleased', p); }
     else if (op === 'click' || op === 'hover') {
       const p = await at('button, [role=radio], label, .tb-menu-item', a);
@@ -96,6 +160,30 @@ async function take(name, [text, steps]) {
       if (op === 'click') { await mouse('mousePressed', p); await mouse('mouseReleased', p); }
     } else if (op === 'scroll') {
       await evaluate(`(() => { const e = [...document.querySelectorAll('*')].find(e => e.children.length === 0 && e.offsetParent !== null && e.textContent.trim().startsWith(${JSON.stringify(a)})); e.scrollIntoView({ block: 'start' }); let b = e.parentElement; while (b && b.scrollHeight <= b.clientHeight) b = b.parentElement; b?.scrollBy(0, -16); return 1 })()`);
+    } else if (op === 'dot' || op === 'carry') {
+      // dot: from a dot beside a state onto another state, a way; carry: a state carried to a spot of the
+      // drawing, b and c the fractions of its width and height, and held there
+      const G = `document.querySelector('tb-machine-graph').shadowRoot`;
+      const rect = e => `(() => { const e = ${e}; const r = e.getBoundingClientRect(); return [r.x, r.y, r.width, r.height] })()`;
+      const box = n => rect(`[...${G}.querySelectorAll('.node')].find(g => g.querySelector('.name')?.textContent === ${JSON.stringify(n)}).querySelector('.box')`);
+      const [x, y, w, h] = await evaluate(box(a));
+      await mouse('mouseMoved', [x + w / 2, y + h / 2]);
+      await sleep(300);
+      let from = [x + w / 2, y + h / 2], to;
+      if (op === 'dot') {
+        const [hx, hy, hw, hh] = await evaluate(rect(`[...${G}.querySelectorAll('.handle')][1]`));
+        from = [hx + hw / 2, hy + hh / 2];
+        const [x2, y2, w2, h2] = await evaluate(box(b));
+        to = [x2 + w2 / 2, y2 + h2 / 2];
+      } else {
+        const [sx, sy, sw, sh] = await evaluate(rect(`${G}.querySelector('.stage')`));
+        to = [sx + sw * b, sy + sh * c];
+      }
+      await mouse('mouseMoved', from);
+      await mouse('mousePressed', from);
+      for (let i = 1; i <= 12; i++) await send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: from[0] + (to[0] - from[0]) * i / 12, y: from[1] + (to[1] - from[1]) * i / 12, button: 'left', buttons: 1 });
+      if (op === 'dot') await mouse('mouseReleased', to);
+      await sleep(1200);
     } else if (op === 'type') {
       await evaluate(`(() => { const l = [...document.querySelectorAll('label')].find(l => l.textContent.trim() === ${JSON.stringify(a)}); const i = l.control ?? l.parentElement.querySelector('input'); i.focus(); return 1 })()`);
       await send('Input.insertText', { text: b });
@@ -103,7 +191,7 @@ async function take(name, [text, steps]) {
     await sleep(500);
   }
   // the mouse off any face, unless it rests on a menu
-  if (!steps.some(s => ['Layout', 'This file'].includes(s[1]))) await mouse('mouseMoved', [1430, 890]);
+  if (!steps.some(s => ['Layout', 'This file'].includes(s[1]) || s[0] === 'carry')) await mouse('mouseMoved', [1430, 890]);
   await sleep(700);
   const shot = await send('Page.captureScreenshot', { format: 'png' });
   writeFileSync(`${OUT}/${name}.png`, Buffer.from(shot.result.data, 'base64'));
