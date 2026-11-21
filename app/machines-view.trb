@@ -109,30 +109,46 @@ redraw-machines: function [] [
     ]
 ]
 
-; what the engine says is wrong with each machine: the first mistake it finds, where it is written
+; what the engine says is wrong with each machine: the first mistake it finds, where it is written; or,
+; when it is made, its warnings (a state no way leads to yet), each starting with warning:
 machine-problems-of: function [] [
     collect [
         foreach m ms [
+            named: either m/name [rejoin [m/name ": "]] [""]
             if all [m/kind <> 'fragment  late: late-use-problem d ms m] [
-                keep make map! reduce ['at any [late/1 ""] 'message rejoin [either m/name [rejoin [m/name ": "]] [""] late/2]]
+                keep make map! reduce ['at any [late/1 ""] 'message rejoin [named late/2]]
                 continue
             ]
             e: either m/kind = 'fragment [fragment-problem m] [try [machine-engine/make-machine engine-block ms m]]
             if error? e [
                 msg: e/message
                 if find/match msg "machine: " [msg: skip msg 9]
-                keep make map! reduce ['at any [e/at ""] 'message rejoin [either m/name [rejoin [m/name ": "]] [""] msg]]
+                keep make map! reduce ['at any [e/at ""] 'message rejoin [named msg]]
+            ]
+            if object? e [
+                foreach [p msg] e/warnings [
+                    keep make map! reduce ['at any [loaded-at p ""] 'message rejoin ["warning: " named msg] 'warning true]
+                ]
             ]
         ]
     ]
+]
+
+; "No problems", "2 problems", "1 problem, 1 warning", "No problems, 2 warnings"
+problem-count-text: function [n [integer!] w [integer!]] [
+    t: either n = 0 ["No problems"] [rejoin [n either n = 1 [" problem"] [" problems"]]]
+    if w > 0 [append t rejoin [", " w either w = 1 [" warning"] [" warnings"]]]
+    t
 ]
 
 show-machine-problems: function [] [
     machine-problems/data: machine-problems-of
     machine-problems/hidden: empty? machine-problems/data
     if d [
-        n: (length? problems/data) + length? machine-problems/data
-        problem-count/text: either n = 0 ["No problems"] [rejoin [n either n = 1 [" problem"] [" problems"]]]
+        w: 0
+        foreach p machine-problems/data [if select p 'warning [w: w + 1]]
+        n: (length? problems/data) + (length? machine-problems/data) - w
+        problem-count/text: problem-count-text n w
     ]
 ]
 

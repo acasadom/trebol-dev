@@ -219,6 +219,9 @@ build: does [
         to logic! find text "initial waiting"
         to logic! find text "from checking to work/waiting on need-parts"
         to logic! find machine-problems/data/1/message "no way leads to state checking"
+        ; a warning, not a mistake: the machine is made, and the count says it apart
+        to logic! find/match machine-problems/data/1/message "warning: "
+        to logic! find problem-count/text "1 warning"
     ]
 ]
 [
