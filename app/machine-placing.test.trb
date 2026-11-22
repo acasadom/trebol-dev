@@ -24,7 +24,7 @@ repair: machine [
 written: none
 
 serve [
-    GET "/api/files" [#(name: "cog-and-chain" files: ["app.trb"])]
+    GET "api/files.json" [#(name: "cog-and-chain" files: ["app.trb"])]
     GET "/api/file" [select disk query/path]
     PUT "/api/file" [written: body  "Saved."]
 ]

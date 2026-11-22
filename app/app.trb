@@ -41,11 +41,17 @@ hist: none          ; the history of the file being designed
 
 ; the file API answers only the designer's own pages, which say so with this header
 api-get: func [url] [fetch/with url [headers: [X-Trebol-Dev "1"]]]
-api-put: func [url content] [fetch/with url [method: 'PUT  body: content  headers: [X-Trebol-Dev "1"]]]
+; the answer comes whole (status and body), so a save the server refuses is not an error
+api-put: func [url content] [fetch/with url [method: 'PUT  body: content  headers: [X-Trebol-Dev "1"]  full: true]]
+; the version of a file's text the server knows it by: the SHA-256 of its bytes
+text-version: func [t [string!]] [lowercase enbase/base checksum t 'sha256 16]
 
 read-files: function [] [
-    ; no file API answers on a web page: the demo project, saved by downloading
-    either error? r: try [api-get "/api/files"] [
+    ; the listing is asked for next to the page: under trebol-dev the server answers it with the
+    ; project; on a web page (the demo trebol build made) it is the file api/files.json, which says
+    ; demo, so the page asks for nothing that is not there. With neither: the demo project too,
+    ; saved by downloading
+    either any [error? r: try [api-get "api/files.json"]  r/demo] [
         set 'demo copy demo-files
         set 'demo-saved copy demo-files
         project-name/text: "demo: Save downloads the file"
@@ -88,7 +94,24 @@ save-file: function [] [
         put demo-saved path text
         download last split path #"/" text
     ] [
-        api-put rejoin ["/api/file?path=" enhex path] text
+        url: rejoin ["/api/file?path=" enhex path]
+        ; base: the text as last read or saved here; the server refuses it if the file changed since
+        r: api-put rejoin [url "&base=" text-version saved] text
+        if r/status = 412 [
+            either confirm/role rejoin [
+                path " was changed outside the designer since it was opened. Save over that change?"
+                " No reads the file again, and undo brings back what is here."
+            ] 'danger [
+                r: api-put url text
+            ] [
+                t: api-get url
+                set 'saved t
+                write-text t
+                toast rejoin [path " is read again"]
+                exit
+            ]
+        ]
+        unless r/status = 200 [do make error! rejoin ["Not saved: " r/status " " r/body]]
     ]
     set 'saved text
     toast "Saved"

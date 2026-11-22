@@ -36,10 +36,11 @@ final state has a double border, and a black dot points at the initial state of 
 
 ![The states of the repair machine, with no ways yet](img/machine-states.png)
 
-Below the drawing the machine already has a problem: no way leads to `work`. The designer asks the machine itself
-what is wrong, as `trebol check` does, and shows the first mistake it finds, with the line and column. The count
-at the bottom of the window adds these problems to those of the screens. Each problem goes away when it is put
-right.
+Below the drawing the machine already has a warning: no way leads to `work`. A warning is not a mistake: the
+machine is made and runs, and the state is only waiting for the way to it. The designer asks the machine itself
+what is wrong, as `trebol check` does, and shows the first mistake it finds, or its warnings, with the line and
+column. The count at the bottom of the window adds these to those of the screens, warnings apart. Each one goes
+away when it is put right.
 
 ## Ways
 

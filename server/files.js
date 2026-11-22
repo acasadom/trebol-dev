@@ -4,7 +4,8 @@
 // itself may ask: the Host must be a local name (no DNS rebinding) and requests carry the
 // X-Trebol-Dev header, which a page of another site cannot send without the server agreeing.
 
-import { readFile, writeFile, readdir, realpath } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
+import { readFile, writeFile, readdir, realpath, rename, rm } from 'node:fs/promises';
 import { basename, dirname, extname, relative, resolve, sep } from 'node:path';
 
 /** Folders never listed nor read: tools' output and other people's code. */
@@ -61,9 +62,35 @@ export async function listFiles(root) {
   return out.sort();
 }
 
-function send(res, status, body, type = 'text/plain; charset=utf-8') {
-  res.writeHead(status, { 'content-type': type, 'cache-control': 'no-store' });
+function send(res, status, body, type = 'text/plain; charset=utf-8', more = {}) {
+  res.writeHead(status, { 'content-type': type, 'cache-control': 'no-store', ...more });
   res.end(body);
+}
+
+/** The version of a file's text: the SHA-256 of its UTF-8 bytes, in lowercase hex. */
+export function versionOf(text) {
+  return createHash('sha256').update(text, 'utf8').digest('hex');
+}
+
+/** The version a save says it read (?base=), lowercase, or null when it names none. */
+function baseOf(url) {
+  const b = url.searchParams.get('base');
+  return b === null || b.trim() === '' ? null : b.trim().toLowerCase();
+}
+
+/**
+ * Writes text to path all at once: into a file beside it, then renamed over it, so a reader
+ * never sees half of it and a failed write leaves the old file whole.
+ */
+async function writeWhole(path, text) {
+  const tmp = `${path}.${process.pid}.${Date.now()}.tmp`;
+  try {
+    await writeFile(tmp, text, 'utf8');
+    await rename(tmp, path);
+  } catch (e) {
+    await rm(tmp, { force: true });
+    throw e;
+  }
 }
 
 async function bodyOf(req) {
@@ -77,15 +104,18 @@ async function bodyOf(req) {
   return Buffer.concat(chunks).toString('utf8');
 }
 
-/** Answers /api/files and /api/file; gives false for every other request. */
+/**
+ * Answers /api/files.json (the listing, which on a page of trebol build is the static file
+ * app/api/files.json saying demo) and /api/file; gives false for every other request.
+ */
 export async function handleApi(req, res, url) {
-  if (url.pathname !== '/api/files' && url.pathname !== '/api/file') return false;
+  if (url.pathname !== '/api/files.json' && url.pathname !== '/api/file') return false;
   if (!trusted(req)) {
     send(res, 403, 'Only the designer may ask for the files of the project.');
     return true;
   }
   const root = projectRoot();
-  if (url.pathname === '/api/files') {
+  if (url.pathname === '/api/files.json') {
     if (req.method !== 'GET') return send(res, 405, 'GET only'), true;
     send(res, 200, JSON.stringify({ name: basename(root), files: await listFiles(root) }), 'application/json');
     return true;
@@ -98,12 +128,22 @@ export async function handleApi(req, res, url) {
   if (req.method === 'GET') {
     const text = await readFile(path, 'utf8').catch(() => null);
     if (text === null) send(res, 404, 'No such file.');
-    else send(res, 200, text);
+    else send(res, 200, text, undefined, { etag: `"${versionOf(text)}"` });
   } else if (req.method === 'PUT') {
     const text = await bodyOf(req);
     if (text === null) return send(res, 413, 'Too big.'), true;
-    await writeFile(path, text, 'utf8');
-    send(res, 200, 'Saved.');
+    // base names the version the designer read: when the file changed since, the edit made
+    // outside is not lost, the designer is told and asks the person
+    const base = baseOf(url);
+    if (base !== null) {
+      const now = await readFile(path, 'utf8').catch(() => null);
+      if (now === null || versionOf(now) !== base) {
+        const more = now === null ? {} : { etag: `"${versionOf(now)}"` };
+        return send(res, 412, now === null ? 'The file is gone.' : 'The file changed since it was read.', undefined, more), true;
+      }
+    }
+    await writeWhole(path, text);
+    send(res, 200, 'Saved.', undefined, { etag: `"${versionOf(text)}"` });
   } else {
     send(res, 405, 'GET or PUT only');
   }
