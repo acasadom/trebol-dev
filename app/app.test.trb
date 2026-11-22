@@ -48,7 +48,7 @@ view [
 written: none
 
 serve [
-    GET "/api/files" [#(name: "shop" files: ["app.trb" "broken.trb" "notes.trb" "pages.trb" "tabs.trb"])]
+    GET "api/files.json" [#(name: "shop" files: ["app.trb" "broken.trb" "notes.trb" "pages.trb" "tabs.trb"])]
     GET "/api/file" [select disk query/path]
     PUT "/api/file" [written: body  "Saved."]
 ]

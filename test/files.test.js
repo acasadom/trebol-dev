@@ -38,7 +38,7 @@ async function ask(root, method, path, { headers = local, body = '' } = {}) {
 test('lists the .trb files of the project, never hidden, skipped or outside ones', async () => {
   const root = project();
   assert.deepEqual(await listFiles(root), ['app.trb', 'screens/home.trb']);
-  const r = await ask(root, 'GET', '/api/files');
+  const r = await ask(root, 'GET', '/api/files.json');
   assert.equal(r.status, 200);
   assert.deepEqual(JSON.parse(r.body).files, ['app.trb', 'screens/home.trb']);
 });

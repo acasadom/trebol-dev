@@ -25,7 +25,7 @@ written: none
 version: func [t [string!]] [lowercase enbase/base checksum t 'sha256 16]
 
 serve [
-    GET "/api/files" [#(name: "shop" files: ["app.trb"])]
+    GET "api/files.json" [#(name: "shop" files: ["app.trb"])]
     GET "/api/file" [select disk query/path]
     ; as the server does: a save that read another version than the one on disk is refused
     PUT "/api/file" [

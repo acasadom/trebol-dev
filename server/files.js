@@ -104,15 +104,18 @@ async function bodyOf(req) {
   return Buffer.concat(chunks).toString('utf8');
 }
 
-/** Answers /api/files and /api/file; gives false for every other request. */
+/**
+ * Answers /api/files.json (the listing, which on a page of trebol build is the static file
+ * app/api/files.json saying demo) and /api/file; gives false for every other request.
+ */
 export async function handleApi(req, res, url) {
-  if (url.pathname !== '/api/files' && url.pathname !== '/api/file') return false;
+  if (url.pathname !== '/api/files.json' && url.pathname !== '/api/file') return false;
   if (!trusted(req)) {
     send(res, 403, 'Only the designer may ask for the files of the project.');
     return true;
   }
   const root = projectRoot();
-  if (url.pathname === '/api/files') {
+  if (url.pathname === '/api/files.json') {
     if (req.method !== 'GET') return send(res, 405, 'GET only'), true;
     send(res, 200, JSON.stringify({ name: basename(root), files: await listFiles(root) }), 'application/json');
     return true;

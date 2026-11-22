@@ -47,8 +47,11 @@ api-put: func [url content] [fetch/with url [method: 'PUT  body: content  header
 text-version: func [t [string!]] [lowercase enbase/base checksum t 'sha256 16]
 
 read-files: function [] [
-    ; no file API answers on a web page: the demo project, saved by downloading
-    either error? r: try [api-get "/api/files"] [
+    ; the listing is asked for next to the page: under trebol-dev the server answers it with the
+    ; project; on a web page (the demo trebol build made) it is the file api/files.json, which says
+    ; demo, so the page asks for nothing that is not there. With neither: the demo project too,
+    ; saved by downloading
+    either any [error? r: try [api-get "api/files.json"]  r/demo] [
         set 'demo copy demo-files
         set 'demo-saved copy demo-files
         project-name/text: "demo: Save downloads the file"
