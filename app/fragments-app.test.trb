@@ -23,7 +23,7 @@ written: none
 serve [
     GET "api/files.json" [#(name: "shop" files: ["shop.trb"])]
     GET "/api/file" [select disk query/path]
-    PUT "/api/file" [written: body  "Saved."]
+    PUT "/api/file" [set 'written body  "Saved."]
 ]
 
 machines: does [choose "File" "shop.trb"  choose "Edit" "Machines"]
