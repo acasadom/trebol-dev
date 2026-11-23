@@ -38,7 +38,7 @@
     "build:graph": "esbuild editor/machine-graph.js --bundle --minify --format=esm --target=es2022 --legal-comments=eof --outfile=app/machine-graph.js && { printf '/*! elkjs 0.12.1, https://github.com/kieler/elkjs, EPL-2.0 OR GPL-3.0-or-later */\\n'; cat node_modules/elkjs/lib/elk-worker.min.js; } > app/elk-worker.js"
   },
   "dependencies": {
-    "trebol": "^0.7.0"
+    "trebol": "^0.8.1"
   },
   "devDependencies": {
     "@codemirror/commands": "^6.11.1",
