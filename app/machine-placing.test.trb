@@ -26,7 +26,7 @@ written: none
 serve [
     GET "api/files.json" [#(name: "cog-and-chain" files: ["app.trb"])]
     GET "/api/file" [select disk query/path]
-    PUT "/api/file" [written: body  "Saved."]
+    PUT "/api/file" [set 'written body  "Saved."]
 ]
 
 open-machines: does [choose "File" "app.trb"  choose "Edit" "Machines"]

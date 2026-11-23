@@ -95,6 +95,8 @@ palette: [
         tree "Tree" {tree [name]}
         board "Board" {board by status [todo "To do" done "Done"]}
         chart "Chart" {chart bar [month "Month" total "Total"]}
+        stat "Number that stands for something" {stat "Total" 42 "this week" trend [3 5 4 8]}
+        timeline "What happened, and when" {timeline [at text who]}
         progress "Progress" {progress "Progress" 40%}
     ]
     "Action" [
