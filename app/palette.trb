@@ -119,8 +119,10 @@ palette-code: function [item [word!]] [
     foreach [group items] palette [
         foreach [w label code] items [if w = item [return code]]
     ]
-    ; a style the file defines: its word, and a block when it holds faces
+    ; a style the file defines: its word, and a block when it holds faces; one made of its own layout takes
+    ; a block only where that layout has slot
     if def: select ui-style-defs item [
+        if def/layout [return either def/slot [rejoin [item " []"]] [form item]]
         while [def] [
             if def/name = 'container [return rejoin [item " []"]]
             def: def/parent

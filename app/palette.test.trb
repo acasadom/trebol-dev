@@ -28,3 +28,12 @@ import %model.trb
     m: palette-menu/own d/own
     all [find m "This file"  "note []" <> palette-code 'note  "box []" = palette-code 'box  "note" = palette-code 'note]
 ]
+"a style of the file made of its own layout takes a block only where its layout has slot"
+[
+    d: design-of {stylize [kpi: column [layout: [text is [it/text]]]  sect: panel [layout: [heading is [it/text]  slot]]]  view [kpi "a"]}
+    k: palette-code 'kpi
+    s: palette-code 'sect
+    ; the code added lays out with no problem
+    r: ui-sketch load rejoin ["view [" k " " s "]"]
+    to logic! all ["kpi" = k  "sect []" = s  empty? r/2]
+]
