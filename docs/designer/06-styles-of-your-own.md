@@ -43,7 +43,8 @@ view [
 ```
 
 A style made from one that holds faces, a `panel`, a `row`, a `column`, comes in with an empty block, ready for
-the faces you put in it.
+the faces you put in it. One made of its own faces, with a `layout:`, comes in with a block only when that layout
+says `slot`, where the faces you put in it go; without `slot` it holds just its own.
 
 ## Rules of the file
 
