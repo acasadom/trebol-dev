@@ -38,6 +38,11 @@ serve [
     none? problem
 ]
 [
+    ; the code colours them as styles, as it does the file's own
+    w: code-view/props/words
+    all ['style = select w 'badge  'style = select w 'pill]
+]
+[
     click {heading "Main"}
     pick-menu "Add" ["Imported" "badge"]
     pick-menu "Add" ["Imported" "pill"]

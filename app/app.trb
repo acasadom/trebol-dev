@@ -157,13 +157,13 @@ change-text: function [t [string!]] [
     ] [
         set 'problem none
         set 'd e
-        ; the Add menu has the styles the file defines too
+        ; the Add menu has the styles the file defines and imports too
         add-button/menu: get in first layout/only compose/only [button menu (palette-menu/own/imported d/own d/imported)] 'menu
         ; and the code colours them as styles: only when they change, as that lays the editor out anew
-        unless own-words = d/own [
-            set 'own-words copy d/own
+        unless own-words = all-own: union d/own d/imported [
+            set 'own-words all-own
             w: copy code-words
-            foreach s d/own [put w s 'style]
+            foreach s all-own [put w s 'style]
             code-view/props: make code-view/props [words: w]
         ]
     ]
