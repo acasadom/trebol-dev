@@ -147,3 +147,31 @@ import %sample.trb
     {view [^/    tabs [^/        "A" [text "a"]^/        "Tab 2" []^/    ]^/]} = add-piece d first faces-of d 'tab
 ]
 [d: design-of {view [tabs ["A" [text "a"] "B" []]]}  {view [tabs ["B" []]]} = remove-face d second faces-of d]
+
+"a use of a style with a layout: is one face; only the faces written in it are under it"
+[
+    d: design-of {stylize [card: panel [layout: [heading is [it/text]  slot]]]^/view [card "A" [text "a"]  card "B"]}
+    all [
+        [card text card] = collect [foreach f faces-of d [keep f/style]]
+        {text "a"} = face-code d second faces-of d
+    ]
+]
+[
+    d: design-of {stylize [kpi: column [layout: [text muted is [it/text]  heading is [it/value]]]]^/view [kpi "Sales" 3 button "Go"]}
+    [kpi button] = collect [foreach f faces-of d [keep f/style]]
+]
+[
+    d: design-of {stylize [inner: panel [layout: [text "x"  slot]]  outer: panel [layout: [inner [slot]]]]^/view [outer [field name]]}
+    [outer field] = collect [foreach f faces-of d [keep f/style]]
+]
+[
+    d: design-of {stylize [card: panel [layout: [heading is [it/text]  slot]]]^/view [card "A" [text "a"]]}
+    fs: shown-faces d
+    c: second fs
+    all [
+        'card = c/style
+        2 = face-holding d first c/pane
+        3 = face-holding d third fs
+        none? face-holding d make object! [style: 'text pane: none]
+    ]
+]

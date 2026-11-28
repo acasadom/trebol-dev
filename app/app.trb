@@ -359,9 +359,10 @@ mark-chosen: function [] [
     code-view/props: make code-view/props [mark: either s [reduce [s/x s/y]] [none]]
 ]
 
-; a face clicked in the preview
+; a face clicked in the preview: it, or the innermost face of the structure that holds it (a face of a style's
+; layout: chooses the use of the style)
 pick-face: function [f [object!]] [
-    if n: find/same shown-faces d f [choose-face index? n]
+    if i: face-holding d f [choose-face i]
 ]
 
 ; the cursor put in the code: the innermost face written around it

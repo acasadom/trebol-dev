@@ -4,7 +4,7 @@ Trebol [
         design-of spot-of span-of face-range face-span face-code faces-of
         splice cut replace-value remove-face insert-after insert-into move-face
         set-face-text set-face-name face-label style-word toggle-flag
-        layout-of head-end block-span indent-at after-line shown-faces
+        layout-of head-end block-span indent-at after-line shown-faces face-holding
         pane-of own-block written-range values-at inside? set-screen screens-data add-screen piece? set-piece-label add-piece
         set-face-label set-face-global more-on-line? blank? line-start
     ]
@@ -270,14 +270,22 @@ faces-of: function [
     d [object!]
 ] [
     out: copy []
-    walk: function [fs] [
+    ; within: the span of the use of a style with a layout: the faces are under; the faces of that layout: are
+    ; written in the stylize, so only those written inside the use (its slot) count
+    walk: function [fs within] [
         foreach f fs [
-            if face-range d f [append out f]
-            if fs: pane-of d f [walk fs]
+            taken: all [face-range d f  any [not within  span-inside? face-span d f within]]
+            if taken [append out f]
+            ; a use of such a style inside another's layout: leaves the faces to the use written in the text
+            if fs: pane-of d f [walk fs either all [taken  f/composed] [face-span d f] [within]]
         ]
     ]
-    foreach l d/layouts [if l/view [walk l/view/pane]]
+    foreach l d/layouts [if l/view [walk l/view/pane none]]
     out
+]
+
+span-inside?: function ["Whether a span of the text lies inside another" a [pair! none!] b [pair!]] [
+    to logic! all [a  a/x >= b/x  (a/x + a/y) <= (b/x + b/y)]
 ]
 
 shown-faces: function [
@@ -291,6 +299,16 @@ shown-faces: function [
         foreach f fs [if inside? d f l/view [append out f]]
     ]]
     out
+]
+
+face-holding: function [
+    "The index in shown-faces of a face, or of the innermost shown face that holds it; none if none does"
+    d [object!] f [object!]
+] [
+    found: none
+    fs: shown-faces d
+    repeat i length? fs [g: pick fs i  if any [same? g f  inside? d f g] [found: i]]
+    found
 ]
 
 inside?: function [d [object!] f [object!] v [object!]] [
