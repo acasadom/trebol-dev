@@ -1,0 +1,86 @@
+Trebol [
+    title: "What a file defines: its rules and styles, and those of the files and packages it imports"
+    exports: [module-texts package-paths designing module-path run-own run-imports]
+]
+
+; The designer runs nothing of a file but what defines: its rule and stylize blocks, as trebol check
+; does, and before them those of what it imports. It does not use import itself: a module runs once
+; and is kept, while the designer reads the text again at every change and puts back the styles it
+; had before; and import would look for the files next to the designer, not in the project.
+; So the designer keeps the texts of the project's modules, by path, and reads them itself.
+
+; path -> text of each module the designer has read; "" for one that could not be read
+module-texts: make map! []
+; package name -> path of its Trebol module (from its package.json), "" when it has none
+package-paths: make map! []
+; the file being designed: path is where its imports are found from (an object, so who sets it
+; sets it for the designer's every reading)
+designing: make object! [path: ""]
+
+module-path: function [
+    "The path from the project's folder of a file imported from the file at from"
+    from [string!] file [file! string!]
+] [
+    f: form file
+    ; the folder of from, then each part of the file: .. goes up one
+    parts: either #"/" = first f [copy []] [split from "/"]
+    unless #"/" = first f [take/last parts]
+    foreach p split f "/" [
+        case [
+            any [p = "" p = "."] []
+            p = ".." [take/last parts]
+            true [append parts p]
+        ]
+    ]
+    s: copy ""
+    foreach p parts [unless empty? s [append s "/"]  append s p]
+    s
+]
+
+; Runs the rule or stylize blocks of a file's code, and those inside its blocks; one that fails is left out.
+run-own: function [code [block! paren!] kind [word!] /local b n m] [
+    parse code [any [
+        'stylize set b block! (if kind = 'stylize [attempt [stylize copy/deep b]])
+        | 'rule set n lit-word! set m [string! | map! | block!] set b block! (if kind = 'rule [attempt [rule to word! n m copy/deep b]])
+        | set b [block! | paren!] (run-own b kind)
+        | skip
+    ]]
+]
+
+run-imports: function [
+    "Runs what the modules a file imports define, theirs first; gives the modules not read yet: paths, and package names as words"
+    code [block!] from [string!]
+    /local n
+] [
+    missing: copy []
+    seen: copy []
+    walk: function [code from /local n] [
+        parse code [any [
+            'import set n [file! | lit-word!] (
+                p: case [
+                    ; a JavaScript module defines no style nor rule
+                    all [file? n  find [%.js %.mjs] suffix? n] [none]
+                    file? n [module-path from n]
+                    p: select package-paths n: to word! n [p]
+                    true [
+                        unless find missing n [append missing n]
+                        none
+                    ]
+                ]
+                if all [string? p  not empty? p  not find seen p] [
+                    append seen p
+                    either t: select module-texts p [
+                        if block? vs: attempt [load/all t] [
+                            walk vs p
+                            run-own vs 'rule
+                            run-own vs 'stylize
+                        ]
+                    ] [append missing p]
+                ]
+            )
+            | skip
+        ]]
+    ]
+    walk code from
+    missing
+]

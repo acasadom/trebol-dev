@@ -77,6 +77,10 @@ open-file: function [name [string!]] [
         ]
     ]
     set 'path name
+    ; what it imports is read again: a file may have changed outside the designer
+    clear module-texts
+    clear package-paths
+    designing/path: name
     file-choice/value: name
     unless select histories name [put histories name new-history]
     set 'hist select histories name
@@ -118,21 +122,48 @@ save-file: function [] [
     redraw
 ]
 
+; One module a file imports, read for the designer: a path from the project's folder, or a package name
+read-module: function [m [string! word!]] [
+    either word? m [
+        r: unless demo [attempt [api-get rejoin ["/api/package?name=" enhex form m]]]
+        put package-paths m any [all [r r/path] ""]
+    ] [
+        put module-texts m any [
+            either demo [select demo m] [attempt [api-get rejoin ["/api/file?path=" enhex m]]]
+            ""
+        ]
+    ]
+]
+
+; The design of a text with what it imports: the modules not read yet are read, then the text again
+design-with-imports: function [t [string!]] [
+    d: design-of t
+    ; each round reads the modules found in the last; a chain of imports ends
+    loop 20 [
+        if empty? d/missing [break]
+        foreach m d/missing [read-module m]
+        d: design-of t
+    ]
+    d
+]
+
 ; New text, from any change: read it again; text that does not load keeps the last design.
 change-text: function [t [string!]] [
     set 'text t
-    either error? e: try [design-of t] [
+    ; a file another imports is read with this text
+    if path [put module-texts path t]
+    either error? e: try [design-with-imports t] [
         set 'problem form e/message
     ] [
         set 'problem none
         set 'd e
-        ; the Add menu has the styles the file defines too
-        add-button/menu: get in first layout/only compose/only [button menu (palette-menu/own d/own)] 'menu
+        ; the Add menu has the styles the file defines and imports too
+        add-button/menu: get in first layout/only compose/only [button menu (palette-menu/own/imported d/own d/imported)] 'menu
         ; and the code colours them as styles: only when they change, as that lays the editor out anew
-        unless own-words = d/own [
-            set 'own-words copy d/own
+        unless own-words = all-own: union d/own d/imported [
+            set 'own-words all-own
             w: copy code-words
-            foreach s d/own [put w s 'style]
+            foreach s all-own [put w s 'style]
             code-view/props: make code-view/props [words: w]
         ]
     ]

@@ -46,6 +46,32 @@ export async function fileOf(root, name) {
   return path;
 }
 
+/**
+ * The path of a module file the designer may read, not write: a project file, or a .trb file of a
+ * package under the project's node_modules (a linked package may live outside the project).
+ */
+export async function moduleOf(root, name) {
+  const own = await fileOf(root, name);
+  if (own !== null) return own;
+  if (typeof name !== 'string' || extname(name) !== '.trb') return null;
+  const parts = name.split('/');
+  if (parts[0] !== 'node_modules' || parts.length < 3) return null;
+  if (parts.slice(1).some(p => p === '' || p.startsWith('.') || p === 'node_modules')) return null;
+  return resolve(root, ...parts);
+}
+
+/** The path from the project's folder of a package's Trebol module (the "trebol" of its package.json), or null. */
+export async function packageOf(root, name) {
+  if (typeof name !== 'string' || !/^(@[a-z0-9][\w.-]*\/)?[a-z0-9][\w.-]*$/i.test(name)) return null;
+  const json = await readFile(resolve(root, 'node_modules', ...name.split('/'), 'package.json'), 'utf8').catch(() => null);
+  if (json === null) return null;
+  let main;
+  try { main = JSON.parse(json).trebol; } catch { return null; }
+  if (typeof main !== 'string') return null;
+  const path = ['node_modules', ...name.split('/'), ...main.split('/').filter(p => p !== '' && p !== '.')].join('/');
+  return (await moduleOf(root, path)) === null ? null : path;
+}
+
 /** Every .trb file of the project, as paths with / from its folder, in order. */
 export async function listFiles(root) {
   const out = [];
@@ -106,10 +132,11 @@ async function bodyOf(req) {
 
 /**
  * Answers /api/files.json (the listing, which on a page of trebol build is the static file
- * app/api/files.json saying demo) and /api/file; gives false for every other request.
+ * app/api/files.json saying demo), /api/file and /api/package (where a package's Trebol module is);
+ * gives false for every other request.
  */
 export async function handleApi(req, res, url) {
-  if (url.pathname !== '/api/files.json' && url.pathname !== '/api/file') return false;
+  if (!['/api/files.json', '/api/file', '/api/package'].includes(url.pathname)) return false;
   if (!trusted(req)) {
     send(res, 403, 'Only the designer may ask for the files of the project.');
     return true;
@@ -120,7 +147,14 @@ export async function handleApi(req, res, url) {
     send(res, 200, JSON.stringify({ name: basename(root), files: await listFiles(root) }), 'application/json');
     return true;
   }
-  const path = await fileOf(root, url.searchParams.get('path'));
+  if (url.pathname === '/api/package') {
+    if (req.method !== 'GET') return send(res, 405, 'GET only'), true;
+    const path = await packageOf(root, url.searchParams.get('name'));
+    send(res, 200, JSON.stringify({ path: path ?? '' }), 'application/json');
+    return true;
+  }
+  // a package's files are read, never written
+  const path = await (req.method === 'GET' ? moduleOf : fileOf)(root, url.searchParams.get('path'));
   if (path === null) {
     send(res, 400, 'Not a .trb file of the project.');
     return true;

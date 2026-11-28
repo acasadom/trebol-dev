@@ -10,6 +10,8 @@ Trebol [
     ]
 ]
 
+import %imports.trb
+
 ; The text is the truth. A design is what can be read from it: its values (load/all), where each
 ; sits (load-spans) and the faces of each layout in it, laid out without running anything
 ; (ui-sketch). Every edit gives new text that changes only what it must, so comments, spacing and
@@ -49,6 +51,8 @@ design-of: function [
         defs: none      ; style -> style-def of the styles the file redefines
         own: none       ; the styles the file defines or redefines, that a layout writes
         screens: none   ; [screens-face its-screens ...]: all of them, whichever the preview shows
+        imported: none  ; the styles the file's imports define
+        missing: none   ; the modules it imports whose text the designer has not read yet (see run-imports)
     ]
     d/text: text
     d/values: values
@@ -87,6 +91,9 @@ design-of: function [
     ]
     ; the styles and rules the file defines, as check reads them, then its layouts with them
     before: reduce [copy ui-style-defs  copy styles]
+    d/missing: run-imports values designing/path
+    imported: copy styles
+    d/imported: collect [foreach [k v] styles [unless same? v select before/2 k [keep k]]]
     run-own values 'rule
     run-own values 'stylize
     find-layouts values
@@ -101,7 +108,10 @@ design-of: function [
     ; and the one before comes back, so the designer's own screen never changes (rule cannot
     ; redefine one of Trebol's)
     d/defs: make map! []
-    d/own: collect [foreach [k v] styles [unless same? v select before/2 k [keep k]]]
+    d/own: collect [foreach [k v] styles [unless any [
+        same? v select before/2 k
+        all [find d/imported k  same? v select imported k]
+    ] [keep k]]]
     foreach [m old] reduce [ui-style-defs before/1  styles before/2] [
         foreach k keys-of old [
             unless same? select m k select old k [
@@ -111,16 +121,6 @@ design-of: function [
         ]
     ]
     d
-]
-
-; Runs the rule or stylize blocks of a file's code, and those inside its blocks; one that fails is left out.
-run-own: function [code [block! paren!] kind [word!] /local b n m] [
-    parse code [any [
-        'stylize set b block! (if kind = 'stylize [attempt [stylize copy/deep b]])
-        | 'rule set n lit-word! set m [string! | map! | block!] set b block! (if kind = 'rule [attempt [rule to word! n m copy/deep b]])
-        | set b [block! | paren!] (run-own b kind)
-        | skip
-    ]]
 ]
 
 spot-of: function [
