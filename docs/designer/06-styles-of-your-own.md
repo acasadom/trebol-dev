@@ -46,6 +46,30 @@ A style made from one that holds faces, a `panel`, a `row`, a `column`, comes in
 the faces you put in it. One made of its own faces, with a `layout:`, comes in with a block only when that layout
 says `slot`, where the faces you put in it go; without `slot` it holds just its own.
 
+## Styles from other files
+
+Styles worth keeping go in a file of their own, so every screen of the shop uses the same ones. Move the
+`stylize` block to `styles.trb`, next to the screen, and import it:
+
+```text
+Trebol [title: "Cog & Chain"]
+
+import %styles.trb
+
+view [
+    title "Cog & Chain"
+    note "Bicycle repairs, done right."
+]
+```
+
+The designer reads what the file imports, and what those files import in turn, as `trebol check` does: their
+styles and rules, nothing else. A package works too: `import 'shop-kit` reads the file its `package.json` names
+under `"trebol"`. The *Add* menu then has one more group, **Imported**, with the styles that come from them; the
+file's own stay in **This file**.
+
+A style from another file is used like any other, but it is changed in its own file: open `styles.trb` from the
+**File** list. When you go back to the screen, the designer reads it again.
+
 ## Rules of the file
 
 A file may add words of its own to the dialect with `rule`, as the forms page of the second tutorial does with

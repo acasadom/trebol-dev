@@ -101,3 +101,22 @@ test('a save names the version it read: a file changed outside since is not writ
   // the write is whole: no file is left beside the ones saved
   assert.deepEqual(readdirSync(root).filter(n => n.endsWith('.tmp')), []);
 });
+
+test('reads, never writes, the .trb files of a package, and says where its Trebol module is', async () => {
+  const root = project();
+  writeFileSync(join(root, 'node_modules', 'x', 'package.json'), JSON.stringify({ name: 'x', trebol: './x.trb' }));
+  mkdirSync(join(root, 'node_modules', 'plain'));
+  writeFileSync(join(root, 'node_modules', 'plain', 'package.json'), JSON.stringify({ name: 'plain' }));
+  const got = await ask(root, 'GET', '/api/file?path=node_modules/x/x.trb');
+  assert.equal(got.status, 200);
+  assert.equal(got.body, 'x');
+  const put = await ask(root, 'PUT', '/api/file?path=node_modules/x/x.trb', { body: 'changed' });
+  assert.equal(put.status, 400);
+  assert.equal(readFileSync(join(root, 'node_modules', 'x', 'x.trb'), 'utf8'), 'x');
+  for (const bad of ['node_modules/x/../../away/secret.trb', 'node_modules/x/.hidden/a.trb', 'node_modules/x.trb'])
+    assert.equal((await ask(root, 'GET', `/api/file?path=${encodeURIComponent(bad)}`)).status, 400, bad);
+  assert.deepEqual(JSON.parse((await ask(root, 'GET', '/api/package?name=x')).body), { path: 'node_modules/x/x.trb' });
+  for (const none of ['plain', 'missing', '../x', 'a b'])
+    assert.deepEqual(JSON.parse((await ask(root, 'GET', `/api/package?name=${encodeURIComponent(none)}`)).body), { path: '' }, none);
+  assert.equal((await ask(root, 'GET', '/api/package?name=x', { headers: { host: 'localhost:5180' } })).status, 403);
+});

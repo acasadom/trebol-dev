@@ -1,0 +1,77 @@
+Trebol [
+    title: "The designer reads the styles and rules a file imports"
+    app: none
+]
+
+import %model.trb
+import %palette.trb
+
+"paths of imports"
+[(module-path "app.trb" %styles.trb) = "styles.trb"]
+[(module-path "screens/main.trb" %styles.trb) = "screens/styles.trb"]
+[(module-path "screens/main.trb" %../lib/styles.trb) = "lib/styles.trb"]
+[(module-path "screens/main.trb" %./a/./b.trb) = "screens/a/b.trb"]
+[(module-path "screens/main.trb" %/styles.trb) = "styles.trb"]
+
+"styles of an imported file"
+[
+    put module-texts "lib/look.trb" {Trebol [] stylize [badge-a: text [role: 'muted]]}
+    designing/path: "lib/main.trb"
+    d: design-of {import %look.trb  view [badge-a "New"]}
+    designing/path: ""
+    all [
+        empty? d/missing
+        empty? d/layouts/1/problems
+        [badge-a] = d/imported
+        not find d/own 'badge-a
+        {badge-a "New"} = face-code d first faces-of d
+    ]
+]
+[
+    ; what an imported file imports is read too, from where it is
+    put module-texts "ui/base.trb" {stylize [chip-b: text []]}
+    put module-texts "ui/kit.trb" {import %base.trb  stylize [card-b: panel [layout: [chip-b is [it/text]  slot]]]}
+    d: design-of {import %ui/kit.trb  view [card-b "x" [text "a"]]}
+    to logic! all [empty? d/missing  empty? d/layouts/1/problems  find d/imported 'card-b  find d/imported 'chip-b]
+]
+[
+    ; a rule an imported file defines is known to the file's layouts
+    put module-texts "rules-c.trb" {rule 'code-c "a code" [parse value [some digit]]}
+    d: design-of {import %rules-c.trb  view [field code-c]}
+    empty? d/layouts/1/problems
+]
+
+"what is not read yet"
+[
+    d: design-of {import %nowhere-d.trb  import 'pkg-d  import %x.js  view [text "a"]}
+    ["nowhere-d.trb" pkg-d] = d/missing
+]
+[
+    ; a module that could not be read is not asked for again
+    put module-texts "gone-e.trb" ""
+    d: design-of {import %gone-e.trb  view [text "a"]}
+    empty? d/missing
+]
+[
+    ; a package is read from the path its package.json names
+    put package-paths 'pkg-f "node_modules/pkg-f/main.trb"
+    put module-texts "node_modules/pkg-f/main.trb" {import %more.trb}
+    put module-texts "node_modules/pkg-f/more.trb" {stylize [tag-f: text []]}
+    d: design-of {import 'pkg-f  view [tag-f "a"]}
+    all [empty? d/missing  empty? d/layouts/1/problems  [tag-f] = d/imported]
+]
+[
+    ; two files that import each other are each read once
+    put module-texts "loop-g.trb" {import %loop-h.trb  stylize [g-g: text []]}
+    put module-texts "loop-h.trb" {import %loop-g.trb  stylize [h-h: text []]}
+    d: design-of {import %loop-g.trb  view [g-g "a" h-h "b"]}
+    empty? d/layouts/1/problems
+]
+
+"the palette"
+[
+    put module-texts "pal-i.trb" {stylize [pill-i: text []]}
+    d: design-of {import %pal-i.trb  stylize [own-i: text []]  view [pill-i "a"]}
+    m: palette-menu/own/imported d/own d/imported
+    all [find m "This file"  find m "Imported"  find select m "Imported" 'pill-i  not find select m "This file" 'pill-i]
+]

@@ -1,0 +1,46 @@
+Trebol [title: "The designer: styles a file imports, from the project and from a package" app: %app.trb]
+
+disk: #(
+    "screens/main.trb" {Trebol [title: "Main"]
+
+import %../ui/look.trb
+import 'kit-k
+
+view [
+    heading "Main"
+    badge "New"
+    pill "Soon"
+]
+}
+    "ui/look.trb" {Trebol [title: "Look"]
+
+stylize [badge: text [role: 'muted]]
+}
+    "node_modules/kit-k/kit.trb" {Trebol [title: "Kit"]
+
+stylize [pill: text [role: 'muted]]
+}
+)
+written: none
+
+serve [
+    GET "api/files.json" [#(name: "shop" files: ["screens/main.trb" "ui/look.trb"])]
+    GET "/api/file" [either s: select disk query/path [s] [reply 404 "No such file."]]
+    GET "/api/package" [either query/name = "kit-k" [#(path: "node_modules/kit-k/kit.trb")] [#(path: "")]]
+    PUT "/api/file" [set 'written body  "Saved."]
+]
+
+"the styles of what a file imports"
+[
+    ; a face of an imported style is a face of the file, with no problem
+    see {badge "New"}
+    see {pill "Soon"}
+    none? problem
+]
+[
+    click {heading "Main"}
+    pick-menu "Add" ["Imported" "badge"]
+    pick-menu "Add" ["Imported" "pill"]
+    click "Save"
+    not none? find written {heading "Main"^/    badge^/    pill^/    badge "New"}
+]

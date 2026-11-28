@@ -133,17 +133,21 @@ palette-code: function [item [word!]] [
 ]
 
 ; the Add menu: a submenu per group, and one of the styles the file defines
-palette-menu: function [/own words [block!]] [
+palette-menu: function [/own words [block!] /imported more [block!]] [
     out: collect [
         foreach [group items] palette [
             keep group
             keep/only collect [foreach [w label code] items [keep label  keep w]]
         ]
     ]
+    ; the styles the file defines, then those of what it imports that it does not redefine
     words: exclude any [words copy []] [view]
-    unless empty? words [
-        append out "This file"
-        append/only out collect [foreach w words [keep form w  keep w]]
+    more: exclude exclude any [more copy []] words [view]
+    foreach [group ws] reduce ["This file" words  "Imported" more] [
+        unless empty? ws [
+            append out group
+            append/only out collect [foreach w ws [keep form w  keep w]]
+        ]
     ]
     out
 ]
