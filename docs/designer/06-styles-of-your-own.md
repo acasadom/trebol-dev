@@ -46,6 +46,11 @@ A style made from one that holds faces, a `panel`, a `row`, a `column`, comes in
 the faces you put in it. One made of its own faces, with a `layout:`, comes in with a block only when that layout
 says `slot`, where the faces you put in it go; without `slot` it holds just its own.
 
+In the structure such a face is one row, as any other face: the faces of its `layout:` are written in the
+`stylize` block, not where you used the style, so they are not shown under it. Only the faces you put in its
+`slot` are. Clicking any part of it in the preview chooses the face itself; to change what every use of the
+style shows, change its `layout:` in the code.
+
 ## Styles from other files
 
 Styles worth keeping go in a file of their own, so every screen of the shop uses the same ones. Move the
